@@ -1,0 +1,16 @@
+{
+  "name": "presto-claude-code",
+  "owner": {
+    "name": "Yahya Zobi"
+  },
+  "plugins": [
+    {
+      "name": "presto",
+      "source": "./",
+      "description": "Presto look for Claude Code: the Presto logo and colors, a live card of what Claude is doing, usage meters, and Claude riding a Presto scooter."
+    }
+  ],
+  "metadata": {
+    "description": "Presto mods for Claude Code."
+  }
+}
