@@ -1,16 +1,18 @@
-/** Where the current request stands. */
-export type JobStatus = 'working' | 'done' | 'stopped'
+/** The card's status: running, waiting on the person, finished, or failed. */
+export type JobStatus = 'working' | 'input' | 'done' | 'error'
 
 /** One request to Claude, from the prompt to the answer. */
 export type Job = {
   status: JobStatus
+  /** The request as typed: the card's title. */
+  task: string
+  /** While waiting on the person: what Claude is asking ("Allow Bash: npm test?"). */
+  question: string | null
+  /** True when the person stopped the request (shown as "Stopped"). */
+  stopped: boolean
   startedAt: number
   endedAt: number | null
-  /** What Claude is doing now, in a few words ("Editing register.tsx"). */
-  activity: string | null
-  /** Files Claude wrote or edited during the request. */
-  files: string[]
-  /** Tool calls on the main thread. */
+  /** Tool calls on the main thread: the card's steps. */
   tools: number
 }
 

@@ -1,10 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { Register, ThemeSetArgs } from 'claude-code'
 
-import type { Job, Usage } from '../types'
+import type { Job, JobStatus, Usage } from '../types'
 import { PRESTO, RIDER_COLUMNS, RIDER_ROWS, riderCells } from './art'
-import { BRAND, logoSvg, metersSvg, riderVector, streetSvg } from './scene'
-import type { MeterSpec } from './scene'
+import { cardSvg, meterLevel } from './card'
+import { riderVector } from './scene'
 import { makeColors } from './make-colors.js'
 
 // ─── State ──────────────────────────────────────────────────────────────────
@@ -45,7 +45,8 @@ const { theme, problems } = makeColors({
 })
 const LOOK: ThemeSetArgs = { colors: theme }
 
-const WRITE_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+const LABEL: Record<JobStatus, string> = { working: 'Working', input: 'Needs your input', done: 'Done', error: 'Failed' }
+const NOTE = { ok: 'Plenty of room', warn: 'Filling up', hot: 'Compacting soon' } as const
 
 // ─── Small helpers ──────────────────────────────────────────────────────────
 const base = (path: string) => path.split('/').filter(Boolean).pop() ?? path
@@ -53,56 +54,45 @@ const clock = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000))
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+const pct = (n: number | undefined) => Math.max(0, Math.min(100, Math.round(n ?? 0)))
+
+/** "Tue 08:00 AM", in the viewer's own time zone. */
 const resetsLabel = (iso?: string) => {
-  if (!iso) return undefined
+  if (!iso) return '—'
   try {
-    const at = new Date(iso)
-    const soon = at.getTime() - Date.now() < 20 * 3600_000
-    return new Intl.DateTimeFormat(undefined, soon ? { hour: '2-digit', minute: '2-digit' } : { weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(at)
+    return new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(iso))
   } catch {
-    return undefined
+    return '—'
   }
 }
-const bar = (pct: number, width = 8) => {
-  const filled = Math.round((Math.min(100, Math.max(0, pct)) / 100) * width)
+
+/** The card's title while a permission ask waits on the person. */
+function askTitle(tool: string, input: Record<string, unknown>): string {
+  if (tool === 'Bash' && typeof input.command === 'string') return `Allow Bash: ${input.command.split('\n')[0]}?`
+  if (typeof input.file_path === 'string') return `Allow ${tool}: ${base(input.file_path)}?`
+  if (typeof input.url === 'string') return `Allow ${tool}: ${input.url}?`
+  return `Allow ${tool.startsWith('mcp__') ? tool.split('__').slice(1).join(' · ') : tool}?`
+}
+
+/** The first question of an AskUserQuestion call. */
+function firstQuestion(input: Record<string, unknown>): string | null {
+  const qs = input.questions
+  if (Array.isArray(qs) && qs.length > 0 && typeof (qs[0] as { question?: unknown }).question === 'string') return (qs[0] as { question: string }).question
+  return null
+}
+
+const bar = (p: number, width = 8) => {
+  const filled = Math.round((Math.min(100, Math.max(0, p)) / 100) * width)
   return '▰'.repeat(filled) + '▱'.repeat(width - filled)
 }
 
-/** What a tool call means, in a few words. */
-function describe(tool: string, input: Record<string, unknown>): string {
-  const file = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : undefined
-  const pattern = typeof input.pattern === 'string' ? input.pattern : undefined
-  switch (tool) {
-    case 'Edit':
-    case 'MultiEdit':
-    case 'NotebookEdit':
-      return file ? `Editing ${base(file)}` : 'Editing a file'
-    case 'Write':
-      return file ? `Writing ${base(file)}` : 'Writing a file'
-    case 'Read':
-      return file ? `Reading ${base(file)}` : 'Reading a file'
-    case 'Bash':
-      return typeof input.description === 'string' && input.description.length > 0 ? input.description : 'Running a command'
-    case 'Grep':
-    case 'Glob':
-      return pattern ? `Searching for ${pattern}` : 'Searching the code'
-    case 'WebSearch':
-    case 'WebFetch':
-      return 'Looking it up on the web'
-    case 'Agent':
-    case 'Task':
-      return 'Working with a helper agent'
-    default:
-      return tool.startsWith('mcp__') ? `Using ${tool.split('__')[1] ?? 'a connector'}` : `Using ${tool}`
-  }
-}
-
 export const register: Register = on => {
-  // Module values: lost on a reload, and only used to animate a live request.
+  // Module values: lost on a reload, and only used for motion.
   let ticker: { cancel: () => void } | undefined
   let tick = 0
   let bandId: string | undefined
+  // The meters' last values and when they changed, so a change eases in.
+  const meters: Record<'context' | 'week', { pct: number; from?: { pct: number; at: number } } | undefined> = { context: undefined, week: undefined }
 
   const stopTicker = () => {
     ticker?.cancel?.()
@@ -110,19 +100,22 @@ export const register: Register = on => {
   }
 
   on('session.start', async ($, e, next) => {
-    const unpainted = problems.find(line => line.startsWith("Desktop won't paint"))
-    if (unpainted !== undefined) $.ui.toast(`presto: ${unpainted}`)
-    await $.theme.set(LOOK)
-    const u = await $.session.usage()
-    await update($, usage, () => toUsage(u.context.percent, u.rateLimits))
+    try {
+      const unpainted = problems.find(line => line.startsWith("Desktop won't paint"))
+      if (unpainted !== undefined) $.ui.toast(`presto: ${unpainted}`)
+      await $.theme.set(LOOK)
+      const u = await $.session.usage()
+      await update($, usage, () => toUsage(u.context.percent, u.rateLimits))
+    } catch {}
     return next(e)
   })
 
+  // A new request: the card shows it, and Claude drives by.
   on('prompt.submit', async ($, e, next) => {
-    // The card is decoration: never let it hold up a prompt.
     try {
       const now = await $.clock.now()
-      const fresh: Job = { status: 'working', startedAt: now, endedAt: null, activity: 'Thinking', files: [], tools: 0 }
+      const task = (typeof e.text === 'string' ? e.text : '').split('\n').find(l => l.trim().length > 0)?.trim() ?? 'New request'
+      const fresh: Job = { status: 'working', task, question: null, stopped: false, startedAt: now, endedAt: null, tools: 0 }
       await update($, job, () => fresh)
 
       stopTicker()
@@ -132,23 +125,39 @@ export const register: Register = on => {
         if (bandId !== undefined) {
           void $.ui.blit({ requestId: bandId, key: 'rider', cells: riderCells(tick % 2), columns: RIDER_COLUMNS, rows: RIDER_ROWS })
         }
+        // About once a second (and often during the drive-by): elapsed time moves.
         if (tick % 3 === 0) $.ui.invalidate('ui.render')
       })
     } catch {}
     return next(e)
   })
 
+  // Each main-thread tool call is a step. A question to the person waits on them.
   on('tool.call', async ($, e, next) => {
-    if (e.agentId === undefined) try {
-      const input = e as unknown as Record<string, unknown>
-      const path = typeof input.file_path === 'string' ? input.file_path : typeof input.notebook_path === 'string' ? input.notebook_path : undefined
-      const isWrite = WRITE_TOOLS.has(e.tool) && path !== undefined
-      const activity = describe(e.tool, input)
-      await update($, job, (j): Job | null => {
-        if (!j || j.endedAt !== null) return j
-        const files = isWrite && !j.files.includes(path!) ? [...j.files, path!] : j.files
-        return { ...j, activity, tools: j.tools + 1, files }
-      })
+    const main = e.agentId === undefined
+    if (main) {
+      try {
+        const input = e as unknown as Record<string, unknown>
+        const question = e.tool === 'AskUserQuestion' ? firstQuestion(input) : null
+        await update($, job, (j): Job | null =>
+          !j || j.endedAt !== null ? j : { ...j, tools: j.tools + 1, ...(question ? { status: 'input' as const, question } : { status: 'working' as const, question: null }) },
+        )
+      } catch {}
+    }
+    const result = await next(e)
+    if (main) {
+      try {
+        await update($, job, (j): Job | null => (j && j.endedAt === null && j.status === 'input' ? { ...j, status: 'working', question: null } : j))
+      } catch {}
+    }
+    return result
+  })
+
+  // A permission ask: the card says what Claude wants to do.
+  on('classic.PermissionRequest', async ($, e, next) => {
+    try {
+      const question = askTitle(e.tool_name, (e.tool_input ?? {}) as Record<string, unknown>)
+      await update($, job, (j): Job | null => (j && j.endedAt === null ? { ...j, status: 'input', question } : j))
     } catch {}
     return next(e)
   })
@@ -156,14 +165,21 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) {
       stopTicker()
-      const now = await $.clock.now()
-      await update($, job, (j): Job | null => (j && j.endedAt === null ? { ...j, status: e.isAborted ? 'stopped' : 'done', endedAt: now, activity: null } : j))
+      try {
+        const now = await $.clock.now()
+        const failed = e.reason === 'error' || e.reason === 'refusal'
+        await update($, job, (j): Job | null =>
+          j && j.endedAt === null ? { ...j, status: failed || e.isAborted ? 'error' : 'done', stopped: e.isAborted && !failed, question: null, endedAt: now } : j,
+        )
+      } catch {}
     }
     return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
-    await update($, usage, () => toUsage(e.context.percent, e.rateLimits))
+    try {
+      await update($, usage, () => toUsage(e.context.percent, e.rateLimits))
+    } catch {}
     return next(e)
   })
 
@@ -187,7 +203,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // ─── The card above the prompt: the request and usage ─────────────────────
+  // ─── The Presto mode card above the prompt ────────────────────────────────
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     if (e.surface !== 'terminal' && e.surface !== 'desktop' && e.surface !== 'vscode') return next(e)
@@ -197,112 +213,66 @@ export const register: Register = on => {
     const u = (await read($, usage)) as Usage
     const now = await $.clock.now()
     const live = j !== null && j.endedAt === null
-    const elapsed = j === null ? '' : clock((j.endedAt ?? now) - j.startedAt)
+
+    const status: JobStatus = j?.status ?? 'done'
+    const label = j === null ? 'Ready' : j.stopped ? 'Stopped' : LABEL[status]
+    const task = j === null ? 'Ready for your first request' : status === 'input' && j.question ? j.question : j.task
+    const elapsed = j === null ? '0s' : clock((j.endedAt ?? now) - j.startedAt)
+    const steps = j?.tools ?? 0
+    const context = pct(u.context)
+    const week = pct(u.week?.percent)
+    const resets = resetsLabel(u.week?.resetsAt)
+
     const { Box, Text } = $.ui.resolve(e)
 
-    // The headline: what is happening, or what happened.
-    const title =
-      j === null ? 'Ready when you are' : live ? (j.activity ?? 'Working') : j.status === 'stopped' ? 'Stopped' : 'Done'
-    const facts =
-      j === null
-        ? ['Ask for anything to get started']
-        : [
-            elapsed,
-            ...(j.files.length > 0 ? [plural(j.files.length, 'file') + ' changed'] : live ? [] : ['no files changed']),
-            ...(j.tools > 0 ? [plural(j.tools, 'step')] : []),
-          ]
-    const files = j === null || j.files.length === 0 ? null : j.files.map(base).join('  ·  ')
-
-    const specs: MeterSpec[] = [
-      ...(u.context === undefined ? [] : [{ label: 'Context', percent: u.context }]),
-      ...(u.fiveHour ? [{ label: '5-hour', percent: u.fiveHour.percent, ...(resetsLabel(u.fiveHour.resetsAt) ? { note: `resets ${resetsLabel(u.fiveHour.resetsAt)}` } : {}) }] : []),
-      ...(u.week ? [{ label: 'Week', percent: u.week.percent, ...(resetsLabel(u.week.resetsAt) ? { note: `resets ${resetsLabel(u.week.resetsAt)}` } : {}) }] : []),
-    ]
-
-    // ── Terminal: the pixel rider and three plain lines.
+    // ── Terminal: the pixel rider and three plain lines, same fields.
     if (e.surface === 'terminal') {
       const { Raster } = $.ui.resolve(e)
       const showRider = e.props.bodyColumns >= 70 && e.props.maxRows >= RIDER_ROWS
-      const meterColor = (pct: number) => (pct >= 90 ? PRESTO.red : pct >= 70 ? PRESTO.gold : PRESTO.o500)
+      const tone = { working: '#FF4A1A', input: '#FFB547', done: '#3DDC97', error: '#FF4D6A' }[status]
+      const meterColor = (p: number) => (p >= 85 ? '#FF2D55' : p >= 60 ? '#FFA41C' : PRESTO.brand)
       return (
         <Box flexDirection="row" gap={2}>
           {showRider ? <Raster key="rider" columns={RIDER_COLUMNS} rows={RIDER_ROWS} cells={riderCells(live ? tick % 2 : 'parked')} /> : null}
           <Box flexDirection="column" flexGrow={1} flexShrink={1}>
             <Text wrap="truncate-end">
-              <Text color={PRESTO.brand} weight="bold">PRESTO </Text>
-              <Text weight="bold">{title}</Text>
-              <Text dimColor> · {facts.join(' · ')}</Text>
+              <Text color={tone} weight="bold">● {label}</Text>
+              <Text color="#FF5C2E" weight="bold">  Presto</Text>
+              <Text dimColor> mode · {elapsed} · {steps} steps</Text>
             </Text>
-            {files === null ? null : <Text wrap="truncate-end" dimColor>{files}</Text>}
-            {specs.length === 0 ? (
-              <Text dimColor>Usage appears after the first reply</Text>
-            ) : (
-              <Box flexDirection="row" columnGap={3} flexWrap="wrap">
-                {specs.map(m => (
-                  <Text key={m.label}>
-                    <Text dimColor>{m.label} </Text>
-                    <Text color={meterColor(m.percent)}>{bar(m.percent)}</Text>
-                    <Text weight="bold" tabular> {Math.round(m.percent)}%</Text>
-                    {m.note ? <Text dimColor> {m.note}</Text> : null}
-                  </Text>
-                ))}
-              </Box>
-            )}
+            <Text wrap="truncate-end" weight="bold">{task}</Text>
+            <Text wrap="truncate-end">
+              <Text dimColor>Context </Text>
+              <Text color={meterColor(context)}>{bar(context)}</Text>
+              <Text weight="bold" tabular> {context}%</Text>
+              <Text dimColor> {NOTE[meterLevel(context)]}   Week </Text>
+              <Text color={meterColor(week)}>{bar(week)}</Text>
+              <Text weight="bold" tabular> {week}%</Text>
+              <Text dimColor> Resets {resets}</Text>
+            </Text>
           </Box>
         </Box>
       )
     }
 
-    // ── Desktop and VS Code: an ink card with the logo, the street and the meters.
+    // ── Desktop and VS Code: the hand-off card, drawn as one SVG.
+    const from: { context?: { pct: number; at: number }; week?: { pct: number; at: number } } = {}
+    for (const [key, value] of [['context', context], ['week', week]] as const) {
+      const m = meters[key]
+      if (m === undefined) meters[key] = { pct: value }
+      else if (m.pct !== value) meters[key] = { pct: value, from: { pct: m.pct, at: now } }
+      const f = meters[key]!.from
+      if (f) from[key] = f
+    }
+    const sentAt = j?.startedAt
+
     const { Svg } = $.ui.resolve(e)
-    const cols = e.props.bodyColumns
-    const wide = cols >= 96
-    const metersWidth = wide ? 360 : 300
     return (
-      <Box
-        flexDirection="row"
-        alignItems="center"
-        gap={2}
-        backgroundColor={BRAND.ink}
-        borderStyle="round"
-        borderColor={BRAND.line}
-        paddingX={2}
-        paddingY={1}
-      >
-        <Svg source={logoSvg(44)} alt="Presto" width={44} height={44} />
-        <Box flexDirection="column" flexGrow={1} flexShrink={1} gap="xs">
-          <Text wrap="truncate-end">
-            {live ? <Text color={BRAND.red}>● </Text> : j?.status === 'done' ? <Text color={BRAND.dot}>✓ </Text> : null}
-            <Text color={BRAND.text} weight="bold">{title}</Text>
-          </Text>
-          <Text wrap="truncate-end" size="footnote" color={BRAND.soft} tabular>
-            {facts.join('   ·   ')}
-          </Text>
-          {files === null ? null : (
-            <Text wrap="truncate-end" size="footnote" color={BRAND.faint}>
-              {files}
-            </Text>
-          )}
-          {specs.length === 0 ? (
-            <Text size="footnote" color={BRAND.faint}>Usage appears after the first reply</Text>
-          ) : (
-            <Svg
-              source={metersSvg(specs, metersWidth)}
-              alt={specs.map(m => `${m.label} ${Math.round(m.percent)}%`).join(', ')}
-              width={metersWidth}
-              height={specs.some(m => m.note) ? 46 : 30}
-            />
-          )}
-        </Box>
-        {wide ? (
-          <Svg
-            source={streetSvg({ moving: live, width: 216 })}
-            alt={live ? 'Claude riding a Presto scooter' : 'Claude on a parked Presto scooter'}
-            width={216}
-            height={68}
-          />
-        ) : null}
-      </Box>
+      <Svg
+        source={cardSvg({ status, label, task, elapsed, steps, context, week, resets, now, ...(sentAt !== undefined ? { sentAt } : {}), from })}
+        alt={`Presto mode. ${label}: ${task}. ${elapsed}, ${steps} steps. Context ${context}%, week ${week}%, resets ${resets}.`}
+        isInteractive
+      />
     )
   })
 }

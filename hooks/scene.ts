@@ -1,5 +1,5 @@
-// Vector art for the desktop app and VS Code: the Presto logo, Claude's mascot
-// riding a Presto delivery scooter, and the usage meters.
+// Vector art for the desktop app and VS Code: Claude's mascot riding a Presto
+// delivery scooter (the spinner beside the working indicator).
 
 export const BRAND = {
   red: '#FF3000',
@@ -16,29 +16,12 @@ const CLAUDE_DARK = '#B85E41'
 const INK = '#141218'
 const CHROME_DARK = '#7E848D'
 
-/**
- * The logo's mark, traced from the 512 px logo: two 57 px strokes on lines
- * x = y + 73 and x = y - 51, the hook a 89 px arc round (266, 320), and three
- * orange dots of 28.5 px.
- */
+/** The Presto mark for the delivery box: assets/presto-logo-flat.svg geometry, unchanged. */
 const MARK =
-  `<g fill="none" stroke="#FFFFFF" stroke-width="57" stroke-linecap="round">` +
-  `<path d="M172.5 99.5 L329 256 A89 89 0 1 1 190 366"/>` +
-  `<path d="M173 224 L261 312.5"/>` +
+  `<g fill="none" stroke="#FFFFFF" stroke-width="58.8" stroke-linecap="round" stroke-linejoin="round">` +
+  `<path d="M173.2 100.4 L328.27 255.47 A88.7 88.7 0 0 1 202.83 380.91 L173.27 351.35"/><path d="M173 224.2 L261.3 312.5"/>` +
   `</g>` +
-  `<g fill="${BRAND.dot}">` +
-  `<circle cx="172.5" cy="99.5" r="28.5"/><circle cx="261" cy="312.5" r="28.5"/><circle cx="172.5" cy="350.5" r="28.5"/>` +
-  `</g>`
-
-/** The Presto logo as given: the red tile (corner radius 75 of 512) and its mark. */
-export function logoSvg(size = 40): string {
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">` +
-    `<rect width="512" height="512" rx="75" fill="${BRAND.red}"/>` +
-    MARK +
-    `</svg>`
-  )
-}
+  `<g fill="${BRAND.dot}"><circle cx="173" cy="100.3" r="29.2"/><circle cx="261.4" cy="312.7" r="29.2"/><circle cx="173" cy="351.2" r="29.2"/></g>`
 
 const DEFS =
   `<defs>` +
@@ -173,80 +156,4 @@ export function riderVector(opts: { moving: boolean; width?: number }): string {
     rider(opts.moving, false) +
     `</svg>`
   )
-}
-
-/**
- * The street for the band: a night skyline in Presto ink, a road, and the
- * rider riding while Claude works (wheels turn, the street rolls past) or
- * parked when it is done.
- */
-export function streetSvg(opts: { moving: boolean; width?: number }): string {
-  const W = 480
-  const H = 150
-  const w = opts.width ?? 220
-  const far = (dx: number) =>
-    [[0, 52, 34], [38, 34, 24], [66, 70, 30], [100, 44, 36], [140, 78, 24], [168, 50, 30], [202, 62, 34]]
-      .map(([bx, bh, bw]) => `<rect x="${dx + bx!}" y="${120 - bh!}" width="${bw}" height="${bh}" rx="2"/>`)
-      .join('')
-  const windows = (dx: number) =>
-    [[74, 60], [80, 72], [146, 52], [152, 64], [106, 86], [212, 70], [44, 96]]
-      .map(([bx, by]) => `<rect x="${dx + bx!}" y="${by}" width="3" height="4" rx=".6"/>`)
-      .join('')
-  const tiles = [0, 240, 480]
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${w}" height="${Math.round((w * H) / W)}">` +
-    DEFS +
-    (opts.moving ? CSS : '') +
-    `<defs><clipPath id="c"><rect width="${W}" height="${H}" rx="20"/></clipPath>` +
-    `<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#221E27"/><stop offset="1" stop-color="#2E2731"/></linearGradient></defs>` +
-    `<g clip-path="url(#c)">` +
-    `<rect width="${W}" height="${H}" fill="url(#sky)"/>` +
-    `<circle cx="${W - 70}" cy="36" r="13" fill="#FFE2C2" opacity=".85"/>` +
-    `<circle cx="${W - 64}" cy="32" r="12" fill="#221E27"/>` +
-    `<g class="${opts.moving ? 'city' : ''}"><g fill="#38313C">${tiles.map(far).join('')}</g><g fill="${BRAND.dot}" opacity=".7">${tiles.map(windows).join('')}</g></g>` +
-    `<rect y="120" width="${W}" height="30" fill="#0F0D12"/>` +
-    `<rect y="120" width="${W}" height="1.5" fill="#4A4250"/>` +
-    `<line x1="0" y1="136" x2="${W}" y2="136" stroke="#FFFFFF" stroke-opacity=".55" stroke-width="2.5" stroke-dasharray="18 12" class="${opts.moving ? 'road' : ''}"/>` +
-    `<g transform="translate(118 3)">${rider(opts.moving, true)}</g>` +
-    `</g>` +
-    `</svg>`
-  )
-}
-
-/** One usage meter: label, value, and a slim bar in the logo's red-to-orange. */
-export type MeterSpec = { label: string; percent: number; note?: string }
-
-/** The usage meters side by side, as one crisp drawing. */
-export function metersSvg(meters: readonly MeterSpec[], width = 420): string {
-  const n = Math.max(1, meters.length)
-  const gap = 18
-  const colW = (width - gap * (n - 1)) / n
-  const H = meters.some(m => m.note) ? 46 : 30
-  const font = `font-family="-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Inter,sans-serif"`
-  const cols = meters
-    .map((m, i) => {
-      const x = i * (colW + gap)
-      const pct = Math.min(100, Math.max(0, m.percent))
-      const hot = pct >= 90
-      const fill = hot ? '#FF4D3A' : 'url(#fill)'
-      const value = `${Math.round(pct)}%`
-      return (
-        `<text x="${x}" y="12" ${font} font-size="11" fill="${BRAND.soft}" letter-spacing=".2">${esc(m.label)}</text>` +
-        (m.note ? `<text x="${x}" y="42" ${font} font-size="10" fill="${BRAND.faint}">${esc(m.note)}</text>` : '') +
-        `<text x="${x + colW}" y="12" ${font} font-size="11.5" font-weight="600" text-anchor="end" fill="${hot ? '#FF7A66' : BRAND.text}">${value}</text>` +
-        `<rect x="${x}" y="20" width="${colW}" height="5" rx="2.5" fill="#2E2A34"/>` +
-        (pct > 0 ? `<rect x="${x}" y="20" width="${Math.max(5, (colW * pct) / 100)}" height="5" rx="2.5" fill="${fill}"/>` : '')
-      )
-    })
-    .join('')
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${H}" width="${width}" height="${H}">` +
-    `<defs><linearGradient id="fill" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${BRAND.red}"/><stop offset="1" stop-color="${BRAND.dot}"/></linearGradient></defs>` +
-    cols +
-    `</svg>`
-  )
-}
-
-function esc(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }

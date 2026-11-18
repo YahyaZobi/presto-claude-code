@@ -31,80 +31,120 @@ function engine(on: any) {
   on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
 }
 
-test('the card says what Claude is doing, then what it changed', async ($, on) => {
+const svgOf = async (ui: { find: (q: never) => Promise<unknown> }) =>
+  ((await ui.find({ type: 'Svg' } as never)) as { props?: { source?: string } } | undefined)?.props?.source ?? ''
+
+test('a request becomes the card: working, steps, then done', async ($, on) => {
   engine(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
   on('tool.call', () => ({ result: {} }))
   on('turn.complete', () => ({ text: '' }))
-
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
 
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const before = await $.ui.mount({ ...BAND, surface })
-    expect((await before.find({ type: 'Text', text: /Ready when you are/ }))?.text).toContain('Ready when you are')
-    await before.unmount()
-  }
-
-  await $.prompt.submit({ text: 'add a dbt model' } as never)
-  await $.tool.call({ tool: 'Edit', file_path: '/repo/models/orders_daily.sql', old_string: 'a', new_string: 'b' })
+  await $.prompt.submit({ text: 'Add marketplace, MIT license and install section, then validate' } as never)
+  await $.tool.call({ tool: 'Edit', file_path: '/repo/a.ts', old_string: 'a', new_string: 'b' })
+  await $.tool.call({ tool: 'Read', file_path: '/repo/b.ts' })
 
   const working = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect((await working.find({ type: 'Text', text: /^Editing orders_daily\.sql$/ }))?.text).toBe('Editing orders_daily.sql')
+  const w = await svgOf(working)
+  expect(w).toContain('>Working<')
+  expect(w).toContain('Add marketplace, MIT license and install section, then validate')
+  expect(w).toContain('2 steps')
+  expect(w).toContain('Presto</tspan>')
+  expect(w).toContain('#FF4A1A')
+  expect(w).toContain('class="pm-ride"')
   await working.unmount()
 
   await $.turn.complete({ answer: 'done', durationMs: 4000, isAborted: false, turnId: 't1', reason: 'answer' })
+  const done = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const d = await svgOf(done)
+  expect(d).toContain('>Done<')
+  expect(d).toContain('#3DDC97')
+  expect(d.includes('class="pm-pulse"')).toBe(false)
+  await done.unmount()
 
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ ...BAND, surface })
-    expect((await ui.find({ type: 'Text', text: /^Done$/ }))?.text).toBe('Done')
-    expect((await ui.find({ type: 'Text', text: /1 file changed/ }))?.text).toContain('1 file changed')
-    expect((await ui.find({ type: 'Text', text: /orders_daily\.sql/ }))?.text).toContain('orders_daily.sql')
-    expect(JSON.stringify((await ui.find({ type: 'Text', text: /Received|Preparing|On the way|Delivered/ })) ?? null)).toBe('null')
-    await ui.unmount()
-  }
+  const term = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await term.find({ type: 'Text', text: /● Done/ }))?.text).toContain('Done')
+  await term.unmount()
 })
 
-test('usage meters show context, 5-hour and weekly use', async ($, on) => {
+test('a question to the person shows "Needs your input", and a failure shows "Failed"', async ($, on) => {
+  engine(on)
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', () => ({ text: '' }))
+  on('classic.PermissionRequest', () => ({}))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: 'Ship it' } as never)
+
+  // A permission ask: the card says what Claude wants to do.
+  await ($ as any).classic.PermissionRequest({ tool_name: 'Bash', tool_input: { command: 'npm publish --access public' } })
+  const asking = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const seen = await svgOf(asking)
+  await asking.unmount()
+  expect(seen).toContain('Needs your input')
+  expect(seen).toContain('Allow Bash: npm publish --access public?')
+  expect(seen).toContain('#FFB547')
+
+  // Once the tool runs, it is back to work.
+  await $.tool.call({ tool: 'Bash', command: 'npm publish --access public' })
+
+  const after = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await svgOf(after)).toContain('>Working<')
+  await after.unmount()
+
+  await $.turn.complete({ answer: '', durationMs: 1000, isAborted: false, turnId: 't2', reason: 'error' })
+  const failed = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const f = await svgOf(failed)
+  expect(f).toContain('>Failed<')
+  expect(f).toContain('#FF4D6A')
+  await failed.unmount()
+})
+
+test('meters switch level at 60% and 85%, and Week shows the reset time', async ($, on) => {
   engine(on)
   on('session.measure', (_, e) => ({ changed: e.changed }))
-
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.session.measure({
-    context: { window: 1_000_000, tokens: 420_000, percent: 42 },
-    rateLimits: [
-      { kind: 'five_hour', percentUsed: 73 },
-      { kind: 'seven_day', percentUsed: 18.5 },
-    ],
+    context: { window: 1_000_000, tokens: 620_000, percent: 62 },
+    rateLimits: [{ kind: 'seven_day', percentUsed: 88, resetsAt: '2026-11-24T06:00:00Z' }],
     changed: ['context', 'rateLimits'],
   })
-
-  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  expect((await ui.find({ type: 'Text', text: /^ 42%$/ }))?.text).toBe(' 42%')
-  expect((await ui.find({ type: 'Text', text: /^ 73%$/ }))?.text).toBe(' 73%')
-  expect((await ui.find({ type: 'Text', text: /^ 19%$/ }))?.text).toBe(' 19%')
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const s = await svgOf(ui)
+  expect(s).toContain('>62%<')
+  expect(s).toContain('Filling up')
+  expect(s).toContain('#FFA41C')
+  expect(s).toContain('>88%<')
+  expect(s).toContain('#FF2D55')
+  expect(s).toContain('Resets ')
   await ui.unmount()
 
-  const desk = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(((await desk.find({ type: 'Svg', props: { alt: 'Context 42%, 5-hour 73%, Week 19%' } } as never)) as { type?: string } | undefined)?.type).toBe('Svg')
-  await desk.unmount()
+  await $.session.measure({ context: { window: 1_000_000, tokens: 900_000, percent: 91 }, rateLimits: [], changed: ['context'] } as never)
+  const hot = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await svgOf(hot)).toContain('Compacting soon')
+  await hot.unmount()
+})
+
+test('a long title stays on one line with an ellipsis, full text on hover', async ($, on) => {
+  engine(on)
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const long = 'Refactor the warehouse ingestion pipeline so that every dbt model in the orders domain is incremental and documented'
+  await $.prompt.submit({ text: long } as never)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const s = await svgOf(ui)
+  expect(s).toContain(`<title>${long}</title>`)
+  expect(s).toContain('…</text>')
+  expect(s).toContain('prefers-reduced-motion')
+  await ui.unmount()
 })
 
 test('the spinner keeps its words and the rider rides on desktop', async ($, on) => {
   engine(on)
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const SPIN = { plugin: 'presto', component: 'Spinner', requestId: 'main', props: { word: 'Sauteing', message: null, suffix: '…', mode: 'tool-use' } } as const
-
   const desk = await $.ui.mount({ ...SPIN, surface: 'desktop' })
   expect((await desk.find({ type: 'Svg' }))?.type).toBe('Svg')
   await desk.unmount()
-})
-
-test('the desktop card is ink with the Presto logo instead of the word', async ($, on) => {
-  engine(on)
-  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
-  expect(((await ui.find({ type: 'Box', props: { backgroundColor: '#16141A' } } as never)) as { type?: string } | undefined)?.type).toBe('Box')
-  expect(((await ui.find({ type: 'Svg', props: { alt: 'Presto' } } as never)) as { type?: string } | undefined)?.type).toBe('Svg')
-  expect(JSON.stringify((await ui.find({ type: 'Text', text: /PRESTO/ })) ?? null)).toBe('null')
-  await ui.unmount()
 })
