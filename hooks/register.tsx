@@ -3,7 +3,7 @@ import type { Register, ThemeSetArgs } from 'claude-code'
 
 import type { Job, JobStatus, Usage } from '../types'
 import { PRESTO, RIDER_COLUMNS, RIDER_ROWS, riderCells } from './art'
-import { cardSvg, meterLevel } from './card'
+import { cardSvg, clockShape, meterLevel } from './card'
 import { riderVector } from './scene'
 import { makeColors } from './make-colors.js'
 
@@ -93,6 +93,10 @@ export const register: Register = on => {
   let bandId: string | undefined
   // The meters' last values and when they changed, so a change eases in.
   const meters: Record<'context' | 'week', { pct: number; from?: { pct: number; at: number } } | undefined> = { context: undefined, week: undefined }
+  // The last card drawn. The desktop reloads an interactive SVG's frame whenever its
+  // markup changes, which blinks, so the card is rebuilt only when something it shows
+  // changes; a running clock counts up inside the SVG between rebuilds.
+  let card: { key: string; source: string; alt: string } | undefined
 
   const stopTicker = () => {
     ticker?.cancel?.()
@@ -120,13 +124,23 @@ export const register: Register = on => {
 
       stopTicker()
       tick = 0
+      let lastShape = clockShape(0)
       ticker = $.clock.every(350, () => {
         tick += 1
         if (bandId !== undefined) {
           void $.ui.blit({ requestId: bandId, key: 'rider', cells: riderCells(tick % 2), columns: RIDER_COLUMNS, rows: RIDER_ROWS })
         }
-        // About once a second (and often during the drive-by): elapsed time moves.
-        if (tick % 3 === 0) $.ui.invalidate('ui.render')
+        if (bandId !== undefined) {
+          // The terminal prints the elapsed time as text: about once a second.
+          if (tick % 3 === 0) $.ui.invalidate('ui.render')
+        } else {
+          // The desktop card counts by itself; redraw only when the clock's layout changes.
+          const shape = clockShape(tick * 0.35)
+          if (shape !== lastShape) {
+            lastShape = shape
+            $.ui.invalidate('ui.render')
+          }
+        }
       })
     } catch {}
     return next(e)
@@ -256,21 +270,30 @@ export const register: Register = on => {
     }
 
     // ── Desktop and VS Code: the hand-off card, drawn as one SVG.
-    const from: { context?: { pct: number; at: number }; week?: { pct: number; at: number } } = {}
-    for (const [key, value] of [['context', context], ['week', week]] as const) {
-      const m = meters[key]
-      if (m === undefined) meters[key] = { pct: value }
-      else if (m.pct !== value) meters[key] = { pct: value, from: { pct: m.pct, at: now } }
-      const f = meters[key]!.from
-      if (f) from[key] = f
+    const runFor = live && j !== null ? (now - j.startedAt) / 1000 : undefined
+    const key = JSON.stringify([e.surface, status, label, task, steps, context, week, resets, j?.startedAt ?? null, runFor === undefined ? elapsed : clockShape(runFor)])
+    if (card === undefined || card.key !== key) {
+      const from: { context?: { pct: number; at: number }; week?: { pct: number; at: number } } = {}
+      for (const [name, value] of [['context', context], ['week', week]] as const) {
+        const m = meters[name]
+        if (m === undefined) meters[name] = { pct: value }
+        else if (m.pct !== value) meters[name] = { pct: value, from: { pct: m.pct, at: now } }
+        const f = meters[name]!.from
+        if (f) from[name] = f
+      }
+      const sentAt = j?.startedAt
+      card = {
+        key,
+        source: cardSvg({ status, label, task, elapsed, steps, context, week, resets, now, ...(sentAt !== undefined ? { sentAt } : {}), ...(runFor !== undefined ? { liveFrom: runFor } : {}), from }),
+        alt: `Presto mode. ${label}: ${task}. ${runFor === undefined ? `${elapsed}, ` : ''}${steps} steps. Context ${context}%, week ${week}%, resets ${resets}.`,
+      }
     }
-    const sentAt = j?.startedAt
 
     const { Svg } = $.ui.resolve(e)
     return (
       <Svg
-        source={cardSvg({ status, label, task, elapsed, steps, context, week, resets, now, ...(sentAt !== undefined ? { sentAt } : {}), from })}
-        alt={`Presto mode. ${label}: ${task}. ${elapsed}, ${steps} steps. Context ${context}%, week ${week}%, resets ${resets}.`}
+        source={card.source}
+        alt={card.alt}
         isInteractive
       />
     )

@@ -23,6 +23,11 @@ export type CardData = {
   now: number
   /** When the request was sent, in ms: the rider drives by right after. */
   sentAt?: number
+  /**
+   * Seconds the request has run, at `now`, while it is still running. Given, the
+   * clock counts up inside the SVG itself, so the card need not be redrawn each second.
+   */
+  liveFrom?: number
   /** Meter values a moment ago and when they changed, to animate the fill. */
   from?: { context?: { pct: number; at: number }; week?: { pct: number; at: number } }
 }
@@ -169,6 +174,59 @@ function rider(): string {
   )
 }
 
+/**
+ * Which layout the running clock is in: "9s", "59s", "9m 59s", "99m 59s", and so
+ * on. Within one, the clock's width stays put and its digits count up by SMIL, so
+ * the card only has to be redrawn when this changes.
+ */
+export function clockShape(seconds: number): string {
+  const e = Math.max(0, Math.floor(seconds))
+  if (e < 10) return 's1'
+  if (e < 60) return 's2'
+  const m = Math.floor(e / 60)
+  const n = String(m).length
+  // Minute labels come in windows of at most 120, so a long run stays small.
+  return `m${n}w${Math.floor((m - 10 ** (n - 1)) / 120)}`
+}
+
+/** A clock that counts up from `from` seconds by itself (SMIL visibility steps). */
+function liveClock(from: number): { chars: number; svg: (x: number, y: number, attrs: string) => string } {
+  const e = Math.max(0, Math.floor(from))
+  const begin = `${(-Math.max(0, from)).toFixed(3)}s`
+  const adv = MONO_ADVANCE * 12
+  // One glyph, shown while the clock (in seconds since the request) is in
+  // [lo, hi) of each `period`; repeatCount 1 when `period` covers the whole run.
+  const glyph = (ch: string, x: number, y: number, attrs: string, period: number, lo: number, hi: number, once = false) => {
+    const k = (t: number) => +(t / period).toFixed(6)
+    const [values, times] =
+      lo === 0 ? (hi >= period ? ['visible', '0'] : ['visible;hidden', `0;${k(hi)}`]) : hi >= period ? ['hidden;visible', `0;${k(lo)}`] : ['hidden;visible;hidden', `0;${k(lo)};${k(hi)}`]
+    const repeat = once ? 'repeatCount="1" fill="freeze"' : 'repeatCount="indefinite"'
+    return `<text x="${x.toFixed(2)}" y="${y}" ${attrs} visibility="hidden">${ch}<animate attributeName="visibility" calcMode="discrete" dur="${period}s" begin="${begin}" ${repeat} values="${values}" keyTimes="${times}"/></text>`
+  }
+  const units = (x: number, y: number, a: string) => Array.from({ length: 10 }, (_, d) => glyph(String(d), x, y, a, 10, d, d + 1)).join('')
+  const tens = (x: number, y: number, a: string, first: number) =>
+    Array.from({ length: 6 - first }, (_, i) => first + i).map(d => glyph(String(d), x, y, a, 60, d * 10, d * 10 + 10)).join('')
+  const fixed = (ch: string, x: number, y: number, a: string) => `<text x="${x.toFixed(2)}" y="${y}" ${a}>${ch}</text>`
+
+  if (e < 10) return { chars: 2, svg: (x, y, a) => units(x, y, a) + fixed('s', x + adv, y, a) }
+  if (e < 60) return { chars: 3, svg: (x, y, a) => tens(x, y, a, 1) + units(x + adv, y, a) + fixed('s', x + 2 * adv, y, a) }
+  const m0 = Math.floor(e / 60)
+  const n = String(m0).length
+  const lo = 10 ** (n - 1)
+  const winStart = lo + Math.floor((m0 - lo) / 120) * 120
+  const last = Math.min(10 ** n - 1, winStart + 119)
+  return {
+    chars: n + 4,
+    svg: (x, y, a) => {
+      let out = ''
+      const span = (last + 1) * 60
+      for (let m = m0; m <= last; m++) out += glyph(String(m), x, y, a, span, m * 60, m * 60 + 60, true)
+      const sx = x + n * adv
+      return out + fixed('m', sx, y, a) + tens(sx + 2 * adv, y, a, 0) + units(sx + 3 * adv, y, a) + fixed('s', sx + 4 * adv, y, a)
+    },
+  }
+}
+
 /** How long the drive-by takes, from one side of the card to the other. */
 export const RIDE_MS = 3400
 
@@ -211,12 +269,15 @@ export function cardSvg(d: CardData): string {
   const stepsTextX = mainRight - stepsW
   const stepsIconX = stepsTextX - 6 - 13
   const sepCx = stepsIconX - 14 - 1.5
-  const elapsedW = monoWidth(d.elapsed, 12)
+  const live = d.liveFrom === undefined ? null : liveClock(d.liveFrom)
+  const elapsedW = live ? live.chars * MONO_ADVANCE * 12 : monoWidth(d.elapsed, 12)
   const elapsedX = sepCx - 1.5 - 14 - elapsedW
   const clockX = elapsedX - 6 - 13
   const meta =
     icon(ICON_CLOCK, clockX, headMid - 6.5, 13, C.textSubtle, 2) +
-    `<text x="${elapsedX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(d.elapsed)}</text>` +
+    (live
+      ? live.svg(elapsedX, metaBase, `font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}"`)
+      : `<text x="${elapsedX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(d.elapsed)}</text>`) +
     `<circle cx="${sepCx}" cy="${headMid}" r="1.5" fill="${C.separator}"/>` +
     icon(ICON_STEPS, stepsIconX, headMid - 6.5, 13, C.textSubtle, 2) +
     `<text x="${stepsTextX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(stepsText)}</text>`

@@ -148,3 +148,41 @@ test('the spinner keeps its words and the rider rides on desktop', async ($, on)
   expect((await desk.find({ type: 'Svg' }))?.type).toBe('Svg')
   await desk.unmount()
 })
+
+test('the card keeps the same markup while only time passes, so it never blinks', async ($, on) => {
+  engine(on)
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  on('tool.call', () => ({ result: {} }))
+  on('turn.complete', () => ({ text: '' }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: 'Tidy the README' } as never)
+
+  // Each mount reads the clock, which moves a second each time.
+  const a = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const first = await svgOf(a)
+  await a.unmount()
+  const b = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const second = await svgOf(b)
+  await b.unmount()
+  expect(second).toBe(first)
+  // The running clock counts up inside the SVG.
+  expect(first).toContain('<animate attributeName="visibility"')
+
+  // A new step is something to show: the card is rebuilt.
+  await $.tool.call({ tool: 'Read', file_path: '/repo/b.ts' })
+  const c = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const third = await svgOf(c)
+  await c.unmount()
+  expect(third).not.toBe(first)
+  expect(third).toContain('1 steps')
+
+  // Done: redraws from anywhere else leave it alone.
+  await $.turn.complete({ answer: 'done', durationMs: 4000, isAborted: false, turnId: 't1', reason: 'answer' })
+  const d1 = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const done1 = await svgOf(d1)
+  await d1.unmount()
+  const d2 = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  expect(await svgOf(d2)).toBe(done1)
+  expect(done1).not.toContain('<animate attributeName="visibility"')
+  await d2.unmount()
+})
