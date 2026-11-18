@@ -254,9 +254,9 @@ export function cardSvg(d: CardData): string {
   const dotCx = mainX + 9 + 3.5
   const pill =
     `<rect x="${mainX}" y="${top}" width="${pillW}" height="24" rx="12" fill="${s.bg}"/>` +
-    `<rect x="${mainX + 0.5}" y="${top + 0.5}" width="${pillW - 1}" height="23" rx="11.5" fill="none" stroke="${s.ring}"/>` +
+    `<rect x="${mainX + 0.5}" y="${top + 0.5}" width="${pillW - 1}" height="23" rx="11.5" fill="none" stroke="${s.ring}" stroke-opacity=".6"/>` +
     (s.pulse ? `<circle class="pm-pulse" cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}" style="animation-delay:${phase(now, 1800)}"/>` : '') +
-    `<circle cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}" filter="url(#pmDotGlow)"/>` +
+    `<circle cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}"/>` +
     `<text x="${mainX + 9 + 7 + 8}" y="${baseline(top, 24, 11.5) + 0.2}" font-family="${SANS}" font-size="11.5" font-weight="600" letter-spacing="0.23" fill="${s.text}">${esc(label)}</text>`
   const tagX = mainX + pillW + 10
   const tag =
@@ -295,12 +295,12 @@ export function cardSvg(d: CardData): string {
     const pct = Math.max(0, Math.min(100, Math.round(pctRaw)))
     const lv = meterLevel(pct)
     const L = LEVEL[lv]
-    const trackY = metersTop + 15 + 7
+    const trackY = metersTop + 15 + 8
     const fillW = (colW * pct) / 100
-    const noteTop = trackY + 6 + 7
+    const noteTop = trackY + 4 + 8
     const head =
       `<text x="${x}" y="${baseline(metersTop, 15, 12)}" font-family="${SANS}" font-size="12" font-weight="500" fill="${C.textMuted}">${key === 'context' ? 'Context' : 'Week'}</text>` +
-      `<text x="${x + colW}" y="${baseline(metersTop, 15, 12.5, true)}" text-anchor="end" font-family="${MONO}" font-size="12.5" font-weight="600" fill="${L.value}" style="font-variant-numeric:tabular-nums">${pct}%</text>`
+      `<text x="${x + colW}" y="${baseline(metersTop, 15, 12.5, true)}" text-anchor="end" font-family="${MONO}" font-size="12.5" font-weight="600" fill="${L.value}" style="font-variant-numeric:tabular-nums">${pct}<tspan fill="${C.textSubtle}" font-weight="500">%</tspan></text>`
 
     // The fill eases from the last value to this one over 0.6 s.
     const from = d.from?.[key]
@@ -310,9 +310,7 @@ export function cardSvg(d: CardData): string {
     const anim = `pm-${key}-grow`
     const moveCss = easing
       ? `@keyframes ${anim}{from{transform:scaleX(${fromW / Math.max(fillW, 0.001)})}to{transform:scaleX(1)}}` +
-        `@keyframes ${anim}-k{from{transform:translateX(${fromW - fillW}px)}to{transform:translateX(0)}}` +
-        `.${anim}{transform-origin:${x}px 0;animation:${anim} .6s cubic-bezier(.2,.7,.2,1) ${(-age / 1000).toFixed(3)}s both}` +
-        `.${anim}-k{animation:${anim}-k .6s cubic-bezier(.2,.7,.2,1) ${(-age / 1000).toFixed(3)}s both}`
+        `.${anim}{transform-origin:${x}px 0;animation:${anim} .6s cubic-bezier(.2,.7,.2,1) ${(-age / 1000).toFixed(3)}s both}` 
       : ''
 
     const gid = `pmFill-${key}`
@@ -320,19 +318,10 @@ export function cardSvg(d: CardData): string {
       `<linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="${x}" y1="0" x2="${x + Math.max(fillW, 1)}" y2="0">` +
       L.stops.map(([o, c]) => `<stop offset="${o}" stop-color="${c}"/>`).join('') +
       `</linearGradient>` +
-      `<clipPath id="pmClip-${key}"><rect x="${x}" y="${trackY}" width="${Math.max(fillW, 0.001)}" height="6" rx="3"/></clipPath>` +
-      `<rect x="${x}" y="${trackY}" width="${colW}" height="6" rx="3" fill="rgba(255,255,255,0.08)"/>` +
-      `<rect x="${x + 1}" y="${trackY}" width="${colW - 2}" height="1" rx=".5" fill="rgba(0,0,0,0.5)"/>` +
+      `<rect x="${x}" y="${trackY}" width="${colW}" height="4" rx="2" fill="rgba(255,255,255,0.07)"/>` +
       (pct > 0
-        ? `<g class="${easing ? anim : ''}">` +
-          `<rect x="${x}" y="${trackY}" width="${fillW}" height="6" rx="3" fill="url(#${gid})" style="filter:drop-shadow(0 0 5px ${L.glow})"/>` +
-          `<g clip-path="url(#pmClip-${key})"><rect class="pm-shimmer" x="${x}" y="${trackY}" width="${fillW * 0.4}" height="6" fill="url(#pmShimmer)" style="animation-delay:${phase(now, 2600)}"/></g>` +
-          `</g>`
-        : '') +
-      `<g class="${easing ? `${anim}-k` : ''}">` +
-      `<circle cx="${x + fillW}" cy="${trackY + 3}" r="5.5" fill="${L.ring}" style="filter:drop-shadow(0 0 4px ${L.glow})"/>` +
-      `<circle cx="${x + fillW}" cy="${trackY + 3}" r="3.5" fill="${C.knob}"/>` +
-      `</g>`
+        ? `<g class="${easing ? anim : ''}"><rect x="${x}" y="${trackY}" width="${Math.max(fillW, 4)}" height="4" rx="2" fill="url(#${gid})"/></g>`
+        : '')
 
     const noteBase = baseline(noteTop, 14, 11.5)
     const note =
@@ -357,43 +346,21 @@ export function cardSvg(d: CardData): string {
     ? `<g class="pm-ride" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${H - 33}) scale(.27)">${rider()}</g></g>`
     : ''
 
-  // ── Background geometry (card coordinates; the surface starts at 1, 1).
-  // Border gradient at 140deg across the 720 x 176 box.
-  const ang = (140 * Math.PI) / 180
-  const vx = Math.sin(ang)
-  const vy = -Math.cos(ang)
-  const half = (Math.abs(W * vx) + Math.abs(H * vy)) / 2
-  const bx1 = W / 2 - vx * half
-  const by1 = H / 2 - vy * half
-  const bx2 = W / 2 + vx * half
-  const by2 = H / 2 + vy * half
-
-  const laneX = 1 + 136
-  const laneW = W - 1 - laneX
-  const glareW = laneW * 0.55
-
   const css =
     FONT_FACES +
     `.pm-pulse{transform-box:fill-box;transform-origin:center;opacity:0;animation:pm-pulse 1.8s cubic-bezier(.2,.6,.3,1) infinite}` +
-    `.pm-glare{transform-box:fill-box;transform:translateX(-130%);animation:pm-glare 8s ease-in-out infinite;animation-delay:${phase(now, 8000)}}` +
-    `.pm-glow-a{transform-box:fill-box;transform-origin:center;animation:pm-drift 14s ease-in-out infinite;animation-delay:${phase(now, 14000)}}` +
-    `.pm-glow-b{transform-box:fill-box;transform-origin:center;animation:pm-drift 18s ease-in-out infinite reverse;animation-delay:${phase(now, 18000)}}` +
-    `.pm-shimmer{transform-box:fill-box;transform:translateX(-100%);animation:pm-shimmer 2.6s ease-in-out infinite}` +
     `.pm-ride{animation:pm-ride ${RIDE_MS}ms cubic-bezier(.45,.05,.4,1) both}` +
     `.pm-spin{animation:pm-spin .4s linear infinite}` +
     `.pm-bob{animation:pm-bob .45s ease-in-out infinite}` +
     `.pm-puff{animation:pm-puff .6s ease-out infinite}` +
     `@keyframes pm-pulse{0%{transform:scale(1);opacity:.55}70%{transform:scale(2.6);opacity:0}100%{transform:scale(2.6);opacity:0}}` +
-    `@keyframes pm-glare{0%{transform:translateX(-130%)}55%{transform:translateX(130%)}100%{transform:translateX(130%)}}` +
-    `@keyframes pm-drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(-16px,8px) scale(1.06)}100%{transform:translate(0,0) scale(1)}}` +
-    `@keyframes pm-shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}` +
     `@keyframes pm-ride{0%{transform:translateX(-80px)}100%{transform:translateX(${W + 10}px)}}` +
     `@keyframes pm-spin{to{transform:rotate(360deg)}}` +
     `@keyframes pm-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.2px)}}` +
     `@keyframes pm-puff{0%{transform:translateX(0);opacity:.9}100%{transform:translateX(-12px);opacity:0}}` +
     ctx.css +
     wk.css +
-    `@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.pm-glare{transform:translateX(115%)!important}.pm-ride{display:none}}`
+    `@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.pm-ride{display:none}}`
 
   // Ids unique to this drawing, so two cards on one page never share gradients.
   const u = `${d.status}${Math.round(d.context)}x${Math.round(d.week)}`
@@ -401,42 +368,18 @@ export function cardSvg(d: CardData): string {
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Presto mode: ${esc(label)}. ${esc(d.task)}">` +
     `<style>${css}</style>` +
     `<defs>` +
-    `<linearGradient id="pmBorder" gradientUnits="userSpaceOnUse" x1="${bx1.toFixed(1)}" y1="${by1.toFixed(1)}" x2="${bx2.toFixed(1)}" y2="${by2.toFixed(1)}">` +
-    `<stop offset="0" stop-color="rgba(255,255,255,0.20)"/><stop offset="0.30" stop-color="rgba(255,255,255,0.06)"/><stop offset="0.62" stop-color="rgba(255,255,255,0.04)"/><stop offset="1" stop-color="${s.edge}"/>` +
-    `</linearGradient>` +
+    `<linearGradient id="pmBorder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".13"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".06"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".04"/></linearGradient>` +
     `<linearGradient id="pmSurface" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.surfaceHigh}"/><stop offset="1" stop-color="${C.surface}"/></linearGradient>` +
-    `<radialGradient id="pmWarm"><stop offset="0" stop-color="rgba(255,72,20,0.16)"/><stop offset="0.6" stop-color="rgba(255,72,20,0.05)"/><stop offset="1" stop-color="rgba(255,72,20,0)"/></radialGradient>` +
-    `<radialGradient id="pmTint"><stop offset="0" stop-color="${s.glow}"/><stop offset="1" stop-color="rgba(0,0,0,0)"/></radialGradient>` +
-    `<linearGradient id="pmGlare" gradientTransform="rotate(10 .5 .5)"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/><stop offset=".4" stop-color="#FFFFFF" stop-opacity=".025"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".06"/><stop offset=".6" stop-color="#FFFFFF" stop-opacity=".025"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>` +
-    `<linearGradient id="pmEdge"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".22"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>` +
-    `<linearGradient id="pmShimmer"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".35"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>` +
-    `<radialGradient id="pmReflect"><stop offset="0" stop-color="rgba(255,48,0,0.5)"/><stop offset="1" stop-color="rgba(255,48,0,0)"/></radialGradient>` +
+    `<radialGradient id="pmLight" gradientUnits="userSpaceOnUse" cx="${W * 0.62}" cy="-40" r="${W * 0.55}" gradientTransform="translate(0 -40) scale(1 .45) translate(0 40)"><stop offset="0" stop-color="#FF5C2E" stop-opacity=".09"/><stop offset="1" stop-color="#FF5C2E" stop-opacity="0"/></radialGradient>` +
     `<clipPath id="pmSurfaceClip"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}"/></clipPath>` +
-    `<clipPath id="pmLane"><rect x="${laneX}" y="0" width="${laneW}" height="${H}"/></clipPath>` +
-    `<filter id="pmBlur10" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="10"/></filter>` +
-    `<filter id="pmBlur12" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="12"/></filter>` +
-    `<filter id="pmBlur4" x="-50%" y="-100%" width="200%" height="300%"><feGaussianBlur stdDeviation="4"/></filter>` +
-    `<filter id="pmGrain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>` +
-    `<filter id="pmDotGlow" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur in="SourceGraphic" stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>` +
-    `<filter id="pmLogoShadow" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="10" stdDeviation="7" flood-color="#000" flood-opacity=".55"/><feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#000" flood-opacity=".5"/></filter>` +
+    `<filter id="pmLogoShadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000" flood-opacity=".45"/><feDropShadow dx="0" dy="1" stdDeviation=".75" flood-color="#000" flood-opacity=".35"/></filter>` +
     `</defs>` +
     // 1. Border shell over the surface colour; 2. the surface.
     `<rect width="${W}" height="${H}" rx="${R}" fill="${C.surface}"/>` +
     `<rect width="${W}" height="${H}" rx="${R}" fill="url(#pmBorder)"/>` +
     `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}" fill="url(#pmSurface)"/>` +
-    `<g clip-path="url(#pmSurfaceClip)" pointer-events="none">` +
-    // 3. Glows: warm top right, status tint bottom right. Nothing behind the logo.
-    `<ellipse class="pm-glow-a" cx="${1 + 340 + 240}" cy="${1 - 190 + 165}" rx="240" ry="165" fill="url(#pmWarm)" filter="url(#pmBlur10)"/>` +
-    `<ellipse class="pm-glow-b" cx="${1 + (W - 2 + 130 - 470) + 235}" cy="${1 + (H - 2 + 230 - 340) + 170}" rx="235" ry="170" fill="url(#pmTint)" filter="url(#pmBlur12)"/>` +
-    // 4. Grain.
-    `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" filter="url(#pmGrain)" opacity="0.10" style="mix-blend-mode:overlay"/>` +
-    // 5. Glare lane, right of the logo.
-    `<g clip-path="url(#pmLane)"><rect class="pm-glare" x="${laneX}" y="${-0.4 * H}" width="${glareW}" height="${H * 1.8}" fill="url(#pmGlare)"/></g>` +
-    `</g>` +
-    // 6. Edge light.
-    `<rect x="${1 + 40}" y="1" width="${W - 2 - 80}" height="1" fill="url(#pmEdge)" pointer-events="none"/>` +
-    // 7. Content: logo with its reflection, then the main column.
-    `<ellipse cx="${logoX + 40}" cy="${logoY + LOGO + 11 - 8}" rx="28" ry="8" fill="url(#pmReflect)" filter="url(#pmBlur4)"/>` +
+    // A soft warm light from above, kept clear of the logo.
+    `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}" fill="url(#pmLight)" pointer-events="none"/>` +
     `<g filter="url(#pmLogoShadow)"><svg x="${logoX}" y="${logoY}" width="${LOGO}" height="${LOGO}" viewBox="0 0 512 512">${LOGO_SVG.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg></g>` +
     pill +
     tag +

@@ -93,9 +93,9 @@ export const register: Register = on => {
   let bandId: string | undefined
   // The meters' last values and when they changed, so a change eases in.
   const meters: Record<'context' | 'week', { pct: number; from?: { pct: number; at: number } } | undefined> = { context: undefined, week: undefined }
-  // The last card drawn. The desktop reloads an interactive SVG's frame whenever its
-  // markup changes, which blinks, so the card is rebuilt only when something it shows
-  // changes; a running clock counts up inside the SVG between rebuilds.
+  // The last card drawn. It is drawn as an image (not an interactive frame, which goes
+  // blank while it reloads), and rebuilt only when something it shows changes; a
+  // running clock counts up inside the SVG between rebuilds.
   let card: { key: string; source: string; alt: string } | undefined
 
   const stopTicker = () => {
@@ -294,7 +294,6 @@ export const register: Register = on => {
       <Svg
         source={card.source}
         alt={card.alt}
-        isInteractive
       />
     )
   })

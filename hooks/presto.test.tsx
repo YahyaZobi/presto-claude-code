@@ -112,10 +112,10 @@ test('meters switch level at 60% and 85%, and Week shows the reset time', async 
   })
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const s = await svgOf(ui)
-  expect(s).toContain('>62%<')
+  expect(s).toContain('>62<tspan')
   expect(s).toContain('Filling up')
   expect(s).toContain('#FFA41C')
-  expect(s).toContain('>88%<')
+  expect(s).toContain('>88<tspan')
   expect(s).toContain('#FF2D55')
   expect(s).toContain('Resets ')
   await ui.unmount()
@@ -126,7 +126,7 @@ test('meters switch level at 60% and 85%, and Week shows the reset time', async 
   await hot.unmount()
 })
 
-test('a long title stays on one line with an ellipsis, full text on hover', async ($, on) => {
+test('a long title stays on one line with an ellipsis', async ($, on) => {
   engine(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
@@ -160,6 +160,10 @@ test('the card keeps the same markup while only time passes, so it never blinks'
   // Each mount reads the clock, which moves a second each time.
   const a = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const first = await svgOf(a)
+  const svgEl = (await a.find({ type: 'Svg' } as never)) as { props?: { isInteractive?: boolean } }
+  expect(svgEl.props?.isInteractive).toBeUndefined()
+  // No sweeping glare.
+  expect(first).not.toContain('pm-glare')
   await a.unmount()
   const b = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const second = await svgOf(b)

@@ -30,7 +30,7 @@ Restart Claude Code (or open a new session) to see it.
   - two meters: **Context** (how full the context window is) and **Week** (your weekly limit) with when it resets. They turn amber at 60% and hot red at 85%
 - **The rider**: when you send a prompt, Claude's mascot rides a Presto scooter across the bottom of the card. A small rider also sits beside the "working" indicator.
 
-The card updates in place, so its glow and shimmer never restart, and it goes still if your system asks for reduced motion.
+The card is a quiet dark panel: no sweeping glare or glow effects. It redraws only when something on it changes, the clock counts up by itself, and it goes still if your system asks for reduced motion.
 
 ## Where it draws
 
