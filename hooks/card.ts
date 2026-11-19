@@ -149,6 +149,9 @@ const icon = (paths: string, x: number, y: number, size: number, stroke: string,
   `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
 const ICON_CLOCK = `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`
 const ICON_STEPS = `<path d="M3 20h5v-5h5v-5h5V5h3"/>`
+const ICON_CONTEXT = `<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/>`
+const ICON_HOURGLASS = `<path d="M6 3h12M6 21h12"/><path d="M8 3v3a4 4 0 0 0 1.6 3.2L12 11l2.4-1.8A4 4 0 0 0 16 6V3M8 21v-3a4 4 0 0 1 1.6-3.2L12 13l2.4 1.8A4 4 0 0 1 16 18v3"/>`
+const ICON_WEEK = `<rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/>`
 const ICON_RESET = `<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>`
 
 /** A loop's delay so it shows the frame the wall clock says it is on. */
@@ -283,7 +286,12 @@ export function cardSvg(d: CardData): string {
   // ── Header: badge + "Presto Dev" + pill, then clock · steps and the session cost on the right.
   const headMid = top + 12
   const pillLabelW = measure(label, 11.5, 600, 0.02)
-  const pillW = 9 + 7 + 8 + pillLabelW + 11
+  // Working and Needs input keep the pulsing dot; Done and Failed get a filled glyph.
+  const glyph = d.status === 'done' || d.status === 'error'
+  const indW = glyph ? 14 : 7
+  const padL = glyph ? 5 : 9
+  const indGap = glyph ? 6 : 8
+  const pillW = padL + indW + indGap + pillLabelW + 11
   const BADGE = 30
   const tagW = measure('Presto', 12, 600) + measure(' Dev', 12, 500)
   const tagX = mode === 'inline' ? mainX + BADGE + 10 : mainX + pillW + 10
@@ -301,13 +309,22 @@ export function cardSvg(d: CardData): string {
           )
         })()
       : ''
-  const dotCx = pillX + 9 + 3.5
+  const dotCx = pillX + padL + indW / 2
+  // On Done, the check draws itself once; the negative delay keeps redraws in step.
+  const checkAge = d.doneAt === undefined ? Infinity : now - d.doneAt
+  const checkDraw = checkAge >= 0 && checkAge < 900
+  const indicator = glyph
+    ? `<circle cx="${dotCx}" cy="${headMid}" r="7" fill="${s.tone}"/>` +
+      (d.status === 'done'
+        ? `<path${checkDraw ? ` class="pm-check" style="animation-delay:${(-checkAge / 1000).toFixed(3)}s"` : ''} d="M${dotCx - 3.2} ${headMid + 0.2} l2.2 2.2 l4.2 -4.4" fill="none" stroke="#0B1F16" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" pathLength="10" stroke-dasharray="10"/>`
+        : `<path d="M${dotCx - 2.4} ${headMid - 2.4} l4.8 4.8 M${dotCx + 2.4} ${headMid - 2.4} l-4.8 4.8" fill="none" stroke="#2A0710" stroke-width="1.9" stroke-linecap="round"/>`)
+    : (s.pulse ? `<circle class="pm-pulse" cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}" style="animation-delay:${phase(now, 1800)}"/>` : '') +
+      `<circle cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}"/>`
   const pill =
     `<rect x="${pillX}" y="${top}" width="${pillW}" height="24" rx="12" fill="${s.bg}"/>` +
     `<rect x="${pillX + 0.5}" y="${top + 0.5}" width="${pillW - 1}" height="23" rx="11.5" fill="none" stroke="${s.ring}" stroke-opacity=".6"/>` +
-    (s.pulse ? `<circle class="pm-pulse" cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}" style="animation-delay:${phase(now, 1800)}"/>` : '') +
-    `<circle cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}"/>` +
-    `<text x="${pillX + 9 + 7 + 8}" y="${baseline(top, 24, 11.5) + 0.2}" font-family="${SANS}" font-size="11.5" font-weight="600" letter-spacing="0.23" fill="${s.text}">${esc(label)}</text>`
+    indicator +
+    `<text x="${pillX + padL + indW + indGap}" y="${baseline(top, 24, 11.5) + 0.2}" font-family="${SANS}" font-size="11.5" font-weight="600" letter-spacing="0.23" fill="${s.text}">${esc(label)}</text>`
   const tag =
     `<text x="${tagX}" y="${baseline(headMid - 7.5, 15, 12)}" font-family="${SANS}" font-size="12">` +
     `<tspan font-weight="600" fill="${mode === 'inline' ? C.text : C.brandTag}">Presto</tspan><tspan font-weight="500" fill="${C.textSubtle}"> Dev</tspan></text>`
@@ -356,7 +373,8 @@ export function cardSvg(d: CardData): string {
     const fillW = (colW * pct) / 100
     const noteTop = trackY + 4 + 8
     const head =
-      `<text x="${x}" y="${baseline(metersTop, 15, 12)}" font-family="${SANS}" font-size="12" font-weight="500" fill="${C.textMuted}">${{ context: 'Context', five: '5-hour', week: 'Week' }[key]}</text>` +
+      icon({ context: ICON_CONTEXT, five: ICON_HOURGLASS, week: ICON_WEEK }[key], x, metersTop + 1, 13, lv === 'ok' ? C.textSubtle : L.noteColor, 2) +
+      `<text x="${x + 13 + 6}" y="${baseline(metersTop, 15, 12)}" font-family="${SANS}" font-size="12" font-weight="500" fill="${C.textMuted}">${{ context: 'Context', five: '5-hour', week: 'Week' }[key]}</text>` +
       `<text x="${x + colW}" y="${baseline(metersTop, 15, 12.5, true)}" text-anchor="end" font-family="${MONO}" font-size="12.5" font-weight="600" fill="${L.value}" style="font-variant-numeric:tabular-nums">${pct}<tspan fill="${C.textSubtle}" font-weight="500">%</tspan></text>`
 
     // The fill eases from the last value to this one over 0.6 s.
@@ -469,6 +487,7 @@ export function cardSvg(d: CardData): string {
     `@keyframes pm-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.2px)}}` +
     `@keyframes pm-puff{0%{transform:translateX(0);opacity:.9}100%{transform:translateX(-12px);opacity:0}}` +
     (delivering ? deliverCss : '') +
+    `.pm-check{animation:pm-check .5s cubic-bezier(.3,.7,.3,1) .15s both}@keyframes pm-check{from{stroke-dashoffset:10}to{stroke-dashoffset:0}}` +
     ctx.css +
     five.css +
     wk.css +
@@ -482,7 +501,10 @@ export function cardSvg(d: CardData): string {
     `<defs>` +
     `<linearGradient id="pmBorder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".13"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".06"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".04"/></linearGradient>` +
     `<linearGradient id="pmSurface" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.surfaceHigh}"/><stop offset="1" stop-color="${C.surface}"/></linearGradient>` +
-    `<radialGradient id="pmLight" gradientUnits="userSpaceOnUse" cx="${W * 0.62}" cy="-40" r="${W * 0.55}" gradientTransform="translate(0 -40) scale(1 .45) translate(0 40)"><stop offset="0" stop-color="#FF5C2E" stop-opacity=".09"/><stop offset="1" stop-color="#FF5C2E" stop-opacity="0"/></radialGradient>` +
+    `<radialGradient id="pmLight" gradientUnits="userSpaceOnUse" cx="${W - 70}" cy="${H * 0.3}" r="${W * 0.5}" gradientTransform="translate(${W - 70} ${H * 0.3}) scale(1 .55) translate(${-(W - 70)} ${-H * 0.3})"><stop offset="0" stop-color="#FF4A1C" stop-opacity=".17"/><stop offset=".45" stop-color="#FF4A1C" stop-opacity=".06"/><stop offset="1" stop-color="#FF4A1C" stop-opacity="0"/></radialGradient>` +
+    `<pattern id="pmDots" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="5" cy="5" r=".9" fill="#FF7A45"/></pattern>` +
+    `<radialGradient id="pmDotFade" gradientUnits="userSpaceOnUse" cx="${W - 30}" cy="${H * 0.2}" r="${W * 0.38}"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".5"/><stop offset=".55" stop-color="#FFFFFF" stop-opacity=".12"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></radialGradient>` +
+    `<mask id="pmDotMask"><rect width="${W}" height="${H}" fill="url(#pmDotFade)"/></mask>` +
     `<clipPath id="pmSurfaceClip"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}"/></clipPath>` +
     `<filter id="pmBadgeShadow" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".45"/></filter>` +
     `<filter id="pmLogoShadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000" flood-opacity=".45"/><feDropShadow dx="0" dy="1" stdDeviation=".75" flood-color="#000" flood-opacity=".35"/></filter>` +
@@ -491,8 +513,9 @@ export function cardSvg(d: CardData): string {
     `<rect width="${W}" height="${H}" rx="${R}" fill="${C.surface}"/>` +
     `<rect width="${W}" height="${H}" rx="${R}" fill="url(#pmBorder)"/>` +
     `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}" fill="url(#pmSurface)"/>` +
-    // A soft warm light from above, kept clear of the logo.
+    // A soft Presto-orange glow on the right, and a fine dot grid fading out of it.
     `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}" fill="url(#pmLight)" pointer-events="none"/>` +
+    `<g clip-path="url(#pmSurfaceClip)" pointer-events="none"><rect width="${W}" height="${H}" fill="url(#pmDots)" mask="url(#pmDotMask)"/></g>` +
     (mode === 'inline' ? badge : `<g filter="url(#pmLogoShadow)"><svg x="${logoX}" y="${logoY}" width="${LOGO}" height="${LOGO}" viewBox="0 0 512 512">${LOGO_SVG.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg></g>`) +
     pill +
     tag +
