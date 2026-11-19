@@ -131,7 +131,6 @@ const icon = (paths: string, x: number, y: number, size: number, stroke: string,
   `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
 const ICON_CLOCK = `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`
 const ICON_STEPS = `<path d="M3 20h5v-5h5v-5h5V5h3"/>`
-const ICON_COST = `<circle cx="12" cy="12" r="9"/><path d="M14.8 9.2a3 3 0 0 0-2.8-1.7c-1.7 0-3 .9-3 2.2 0 3.1 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2a3.2 3.2 0 0 1-3-1.8M12 6v1.5M12 16.5V18"/>`
 const ICON_RESET = `<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>`
 
 /** A loop's delay so it shows the frame the wall clock says it is on. */
@@ -258,7 +257,7 @@ export function cardSvg(d: CardData): string {
   const mainH = 24 + 20 + (15 + 8 + 4 + 8 + 14)
   const top = contentTop + (contentH - mainH) / 2
 
-  // ── Header: pill + "Presto mode", then clock · steps on the right.
+  // ── Header: pill + "Presto mode", then clock · steps and the session cost on the right.
   const headMid = top + 12
   const pillLabelW = measure(label, 11.5, 600, 0.02)
   const pillW = 9 + 7 + 8 + pillLabelW + 11
@@ -277,11 +276,18 @@ export function cardSvg(d: CardData): string {
   const stepsText = `${d.steps} steps`
   const metaBase = baseline(headMid - 7.5, 15, 12, true)
   const stepsW = monoWidth(stepsText, 12)
-  const costW = d.cost === undefined ? 0 : monoWidth(d.cost, 12)
-  const costTextX = mainRight - costW
-  const costIconX = costTextX - 6 - 13
-  const costSep = costIconX - 14 - 1.5
-  const stepsTextX = d.cost === undefined ? mainRight - stepsW : costSep - 1.5 - 14 - stepsW
+  const costLabelW = measure('Session', 11, 500, 0.02)
+  const costValueW = d.cost === undefined ? 0 : measure(d.cost, 13.5, 600, -0.01)
+  const chipW = d.cost === undefined ? 0 : 11 + costLabelW + 7 + costValueW + 12
+  const chipX = mainRight - chipW
+  const chip =
+    d.cost === undefined
+      ? ''
+      : `<rect x="${chipX}" y="${top}" width="${chipW}" height="24" rx="12" fill="#FFFFFF" fill-opacity=".05"/>` +
+        `<rect x="${chipX + 0.5}" y="${top + 0.5}" width="${chipW - 1}" height="23" rx="11.5" fill="none" stroke="#FFFFFF" stroke-opacity=".1"/>` +
+        `<text x="${chipX + 11}" y="${baseline(top, 24, 11) + 0.2}" font-family="${SANS}" font-size="11" font-weight="500" letter-spacing="0.22" fill="${C.textSubtle}">Session</text>` +
+        `<text x="${chipX + 11 + costLabelW + 7}" y="${baseline(top, 24, 13.5) + 0.2}" font-family="${SANS}" font-size="13.5" font-weight="600" letter-spacing="-0.135" fill="${C.text}" style="font-variant-numeric:tabular-nums">${esc(d.cost)}</text>`
+  const stepsTextX = d.cost === undefined ? mainRight - stepsW : chipX - 16 - stepsW
   const stepsIconX = stepsTextX - 6 - 13
   const sepCx = stepsIconX - 14 - 1.5
   const live = d.liveFrom === undefined ? null : liveClock(d.liveFrom)
@@ -296,14 +302,11 @@ export function cardSvg(d: CardData): string {
     `<circle cx="${sepCx}" cy="${headMid}" r="1.5" fill="${C.separator}"/>` +
     icon(ICON_STEPS, stepsIconX, headMid - 6.5, 13, C.textSubtle, 2) +
     `<text x="${stepsTextX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(stepsText)}</text>` +
-    (d.cost === undefined
-      ? ''
-      : `<circle cx="${costSep}" cy="${headMid}" r="1.5" fill="${C.separator}"/>` +
-        icon(ICON_COST, costIconX, headMid - 6.5, 13, C.textSubtle, 2) +
-        `<text x="${costTextX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(d.cost)}</text>`)
+    chip
 
-  // ── Meters: three equal columns, 24 apart.
+  // ── Meters: three equal columns, 24 apart, under a hairline.
   const metersTop = top + 24 + 20
+  const rule = `<rect x="${mainX}" y="${top + 24 + 10}" width="${mainW}" height="1" fill="#FFFFFF" fill-opacity=".08"/>`
   const GAP = 24
   const colW = (mainW - 2 * GAP) / 3
   const meter = (key: 'context' | 'five' | 'week', x: number, pctRaw: number, resets?: string) => {
@@ -441,6 +444,7 @@ export function cardSvg(d: CardData): string {
     pill +
     tag +
     meta +
+    rule +
     ctx.svg +
     five.svg +
     wk.svg +

@@ -71,7 +71,7 @@ const costLabel = (usd?: number) => (usd === undefined ? undefined : usd > 0 && 
 const resetsLabel = (iso?: string) => {
   if (!iso) return '—'
   try {
-    return new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(iso))
+    return new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso))
   } catch {
     return '—'
   }
