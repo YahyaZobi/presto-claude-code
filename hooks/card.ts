@@ -334,15 +334,20 @@ export function cardSvg(d: CardData): string {
   const stepsW = monoWidth(stepsText, 12)
   const costLabelW = measure('Session', 11, 500, 0.02)
   const costValueW = d.cost === undefined ? 0 : measure(d.cost, 13.5, 600, -0.01)
-  const chipW = d.cost === undefined ? 0 : 11 + costLabelW + 7 + costValueW + 12
+  const chipW = d.cost === undefined ? 0 : 11 + costLabelW + 8 + costValueW + 12
   const chipX = mainRight - chipW
   const chip =
     d.cost === undefined
       ? ''
-      : `<rect x="${chipX}" y="${top}" width="${chipW}" height="24" rx="12" fill="#FFFFFF" fill-opacity=".05"/>` +
-        `<rect x="${chipX + 0.5}" y="${top + 0.5}" width="${chipW - 1}" height="23" rx="11.5" fill="none" stroke="#FFFFFF" stroke-opacity=".1"/>` +
-        `<text x="${chipX + 11}" y="${baseline(top, 24, 11) + 0.2}" font-family="${SANS}" font-size="11" font-weight="500" letter-spacing="0.22" fill="${C.textSubtle}">Session</text>` +
-        `<text x="${chipX + 11 + costLabelW + 7}" y="${baseline(top, 24, 13.5) + 0.2}" font-family="${SANS}" font-size="13.5" font-weight="600" letter-spacing="-0.135" fill="${C.text}" style="font-variant-numeric:tabular-nums">${esc(d.cost)}</text>`
+      : // An opaque, warm chip: it sits above the glow and dots, so the number stays crisp.
+        `<defs><linearGradient id="pmChipF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2B1D1B"/><stop offset="1" stop-color="#1A1316"/></linearGradient>` +
+        `<linearGradient id="pmChipB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF6A3D" stop-opacity=".7"/><stop offset="1" stop-color="#FF4A1C" stop-opacity=".22"/></linearGradient></defs>` +
+        `<rect x="${chipX - 2}" y="${top - 1 + 2}" width="${chipW + 4}" height="26" rx="13" fill="#000" opacity=".45"/>` +
+        `<rect x="${chipX - 2}" y="${top - 1}" width="${chipW + 4}" height="26" rx="13" fill="url(#pmChipF)"/>` +
+        `<rect x="${chipX - 1.5}" y="${top - 0.5}" width="${chipW + 3}" height="25" rx="12.5" fill="none" stroke="url(#pmChipB)"/>` +
+        `<text x="${chipX + 11}" y="${baseline(top, 24, 11) + 0.2}" font-family="${SANS}" font-size="11" font-weight="500" letter-spacing="0.22" fill="#C9A99C">Session</text>` +
+        `<rect x="${chipX + 11 + costLabelW + 3}" y="${top + 7}" width="1" height="10" fill="#FF6A3D" fill-opacity=".35"/>` +
+        `<text x="${chipX + 11 + costLabelW + 8}" y="${baseline(top, 24, 13.5) + 0.2}" font-family="${SANS}" font-size="13.5" font-weight="700" letter-spacing="-0.135" fill="#FFFFFF" style="font-variant-numeric:tabular-nums">${esc(d.cost)}</text>`
   const stepsTextX = d.cost === undefined ? mainRight - stepsW : chipX - 16 - stepsW
   const stepsIconX = stepsTextX - 6 - 13
   const sepCx = stepsIconX - 14 - 1.5
