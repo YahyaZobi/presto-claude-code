@@ -1,6 +1,6 @@
 {
   "name": "presto",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Presto look for Claude Code: the Presto logo and colors, a live card of what Claude is doing, usage meters, and Claude riding a Presto scooter.",
   "types": "./types/index.d.ts",
   "author": {

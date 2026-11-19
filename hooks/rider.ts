@@ -29,6 +29,8 @@ export type RiderOpts = {
   id: string
   /** Speed lines and exhaust puffs. */
   moving: boolean
+  /** A dashed road scrolling under the wheels (the spinner; the card has its own hairline). */
+  road?: boolean
 }
 
 export function riderArt(o: RiderOpts): string {
@@ -56,12 +58,25 @@ export function riderArt(o: RiderOpts): string {
     // Presto-red hub cap with a glint.
     `<circle cx="${cx}" cy="100" r="3.6" fill="${RED}"/><circle cx="${cx - 1}" cy="98.9" r="1.1" fill="#FFFFFF" opacity=".8"/>`
 
-  const motion = o.moving
-    ? `<g class="${c}lines" stroke="#FFFFFF" stroke-linecap="round">` +
-      `<line x1="0" y1="36" x2="10" y2="36" stroke-width="2.4" opacity=".55"/><line x1="4" y1="48" x2="12" y2="48" stroke-width="2" opacity=".35"/><line x1="0" y1="84" x2="22" y2="84" stroke-width="2.4" opacity=".5"/>` +
-      `</g>` +
-      `<g class="${c}puff" fill="#CFC7C2"><circle cx="34" cy="100" r="4.2"/><circle cx="25.5" cy="97" r="3.2"/><circle cx="18" cy="100.5" r="2.2"/></g>`
+  // Exhaust smoke: puffs leave the pipe, drift back and up, swell and fade,
+  // staggered so the trail is continuous. Two greys for depth.
+  const smoke = [0, 1, 2, 3, 4, 5, 6]
+    .map(i => `<circle class="${c}smoke" cx="40" cy="99.5" r="4.8" fill="${i % 2 ? '#A9A2A6' : '#E4DEDA'}" style="animation-delay:${(-i * 0.14).toFixed(2)}s"/>`)
+    .join('')
+  // Wind streaks that slide back and fade, at three heights.
+  const streaks = (
+    [
+    [36, 14, 2.2, 0],
+    [52, 9, 1.8, -0.14],
+    [84, 18, 2.2, -0.27],
+  ] as [number, number, number, number][]
+  )
+    .map(([y, len, w, dly]) => `<line class="${c}streak" x1="2" y1="${y}" x2="${2 + len}" y2="${y}" stroke="#FFFFFF" stroke-width="${w}" stroke-linecap="round" style="animation-delay:${dly}s"/>`)
+    .join('')
+  const road = o.road
+    ? `<line class="${c}road" x1="-34" y1="120.5" x2="232" y2="120.5" stroke="#FFFFFF" stroke-opacity=".2" stroke-width="2" stroke-linecap="round" stroke-dasharray="12 14"/>`
     : ''
+  const motion = o.moving ? `${road}<g>${smoke}</g>${streaks}` : ''
 
   // Delivery box on its rack: front face, lid, side shade, latch, the Presto mark.
   const box =
@@ -144,18 +159,23 @@ export function riderArt(o: RiderOpts): string {
     `<path d="M67 61 L123 61" stroke="#FFFFFF" stroke-width=".9" opacity=".25" stroke-dasharray="2.2 2"/>`
 
   const shadow = `<ellipse cx="128" cy="117.5" rx="96" ry="3.4" fill="#000000" opacity=".35"/>`
-  return `${defs}${shadow}${motion}${box}${back}<g class="${c}bob">${body}</g>${scooter}`
+  // The whole machine rides on its suspension; Claude bobs a beat apart on top.
+  return `${defs}${shadow}${motion}<g class="${c}susp">${box}${back}<g class="${c}bob">${body}</g>${scooter}</g>`
 }
 
 /** CSS for the classes the drawing uses, with a class prefix. */
 export const riderCss = (c: string) =>
-  `.${c}spin{animation:${c}spin .42s linear infinite}` +
-  `.${c}bob{animation:${c}bob .5s ease-in-out infinite}` +
-  `.${c}scarf{animation:${c}scarf .36s ease-in-out infinite alternate}` +
-  `.${c}lines{animation:${c}lines .32s steps(2) infinite}` +
-  `.${c}puff{animation:${c}puff .7s ease-out infinite}` +
+  `.${c}spin{animation:${c}spin .3s linear infinite}` +
+  `.${c}bob{animation:${c}bob .52s ease-in-out infinite}` +
+  `.${c}susp{animation:${c}susp .34s ease-in-out infinite}` +
+  `.${c}scarf{animation:${c}scarf .3s ease-in-out infinite alternate}` +
+  `.${c}smoke{transform-box:fill-box;transform-origin:center;opacity:0;animation:${c}smoke .98s cubic-bezier(.2,.6,.35,1) infinite}` +
+  `.${c}streak{animation:${c}streak .42s linear infinite}` +
+  `.${c}road{animation:${c}road .28s linear infinite}` +
   `@keyframes ${c}spin{to{transform:rotate(360deg)}}` +
-  `@keyframes ${c}bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.4px)}}` +
-  `@keyframes ${c}scarf{from{transform:skewY(0deg) scaleY(1)}to{transform:skewY(-7deg) scaleY(.82)}}` +
-  `@keyframes ${c}lines{0%{transform:translateX(0);opacity:1}50%{transform:translateX(-5px);opacity:.35}}` +
-  `@keyframes ${c}puff{0%{transform:translateX(0) scale(1);opacity:.9}100%{transform:translateX(-12px) scale(1.4);opacity:0}}`
+  `@keyframes ${c}bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.6px)}}` +
+  `@keyframes ${c}susp{0%,100%{transform:translateY(0)}40%{transform:translateY(-1.1px)}70%{transform:translateY(.3px)}}` +
+  `@keyframes ${c}scarf{from{transform:skewY(0deg) scaleY(1)}to{transform:skewY(-8deg) scaleY(.8)}}` +
+  `@keyframes ${c}smoke{0%{transform:translate(0,0) scale(.4);opacity:.85}30%{opacity:.55}100%{transform:translate(-58px,-16px) scale(2.8);opacity:0}}` +
+  `@keyframes ${c}streak{0%{transform:translateX(6px);opacity:0}25%{opacity:.6}100%{transform:translateX(-16px);opacity:0}}` +
+  `@keyframes ${c}road{to{stroke-dashoffset:26}}`
