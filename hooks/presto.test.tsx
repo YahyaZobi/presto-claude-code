@@ -48,7 +48,8 @@ test('a request becomes the card: working, steps, then done', async ($, on) => {
   const working = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const w = await svgOf(working)
   expect(w).toContain('>Working<')
-  expect(w).toContain('Add marketplace, MIT license and install section, then validate')
+  // The request itself is not drawn on the card.
+  expect(w).not.toContain('Add marketplace')
   expect(w).toContain('2 steps')
   expect(w).toContain('Presto</tspan>')
   expect(w).toContain('#FF4A1A')
@@ -83,7 +84,7 @@ test('a question to the person shows "Needs your input", and a failure shows "Fa
   const seen = await svgOf(asking)
   await asking.unmount()
   expect(seen).toContain('Needs your input')
-  expect(seen).toContain('Allow Bash: npm publish --access public?')
+  expect(seen).toContain('>Needs your input<')
   expect(seen).toContain('#FFB547')
 
   // Once the tool runs, it is back to work.
@@ -126,18 +127,38 @@ test('meters switch level at 60% and 85%, and Week shows the reset time', async 
   await hot.unmount()
 })
 
-test('a long title stays on one line with an ellipsis', async ($, on) => {
+test('the card shows the 5-hour limit and the session cost, and delivers a box on Done', async ($, on) => {
   engine(on)
   on('prompt.submit', (_, e) => ({ text: e.text }))
+  on('turn.complete', () => ({ text: '' }))
+  on('session.measure', (_, e) => ({ changed: e.changed }))
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  const long = 'Refactor the warehouse ingestion pipeline so that every dbt model in the orders domain is incremental and documented'
-  await $.prompt.submit({ text: long } as never)
+  await $.session.measure({
+    context: { window: 1_000_000, tokens: 300_000, percent: 30 },
+    rateLimits: [
+      { kind: 'five_hour', percentUsed: 47, resetsAt: '2026-11-19T15:40:00Z' },
+      { kind: 'seven_day', percentUsed: 13, resetsAt: '2026-11-24T06:00:00Z' },
+    ],
+    cost: { usd: 1.837 },
+    changed: ['context', 'rateLimits', 'cost'],
+  } as never)
+  await $.prompt.submit({ text: 'Tidy the README' } as never)
   const ui = await $.ui.mount({ ...BAND, surface: 'desktop' })
   const s = await svgOf(ui)
-  expect(s).toContain(`<title>${long}</title>`)
-  expect(s).toContain('…</text>')
+  expect(s).toContain('>5-hour<')
+  expect(s).toContain('>47<tspan')
+  expect(s).toContain('$1.84')
+  expect(s).not.toContain('class="pm-dl-rider"')
   expect(s).toContain('prefers-reduced-motion')
   await ui.unmount()
+
+  await $.turn.complete({ answer: 'done', durationMs: 4000, isAborted: false, turnId: 't1', reason: 'answer' })
+  const done = await $.ui.mount({ ...BAND, surface: 'desktop' })
+  const d = await svgOf(done)
+  expect(d).toContain('>Done<')
+  expect(d).toContain('class="pm-dl-rider"')
+  expect(d).toContain('class="pm-dot"')
+  await done.unmount()
 })
 
 test('the spinner keeps its words and the rider rides on desktop', async ($, on) => {

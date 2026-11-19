@@ -4,7 +4,7 @@ export type JobStatus = 'working' | 'input' | 'done' | 'error'
 /** One request to Claude, from the prompt to the answer. */
 export type Job = {
   status: JobStatus
-  /** The request as typed: the card's title. */
+  /** The request as typed (read aloud by screen readers, not drawn). */
   task: string
   /** While waiting on the person: what Claude is asking ("Allow Bash: npm test?"). */
   question: string | null
@@ -23,6 +23,8 @@ export type Usage = {
   context?: number
   fiveHour?: Meter
   week?: Meter
+  /** What the session has cost so far, in US dollars. */
+  cost?: number
 }
 
 declare module 'claude-code' {

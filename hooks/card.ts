@@ -17,8 +17,15 @@ export type CardData = {
   elapsed: string
   steps: number
   context: number
+  /** The 5-hour limit, 0 to 100, and when it resets ("3:40 PM"). */
+  fiveHour: number
+  fiveResets: string
   week: number
   resets: string
+  /** What the session has cost so far ("$1.84"); absent, no cost is shown. */
+  cost?: string
+  /** When the request finished, in ms: on Done, Claude delivers a Presto box. */
+  doneAt?: number
   /** The wall clock, in ms: phases every loop. */
   now: number
   /** When the request was sent, in ms: the rider drives by right after. */
@@ -29,7 +36,7 @@ export type CardData = {
    */
   liveFrom?: number
   /** Meter values a moment ago and when they changed, to animate the fill. */
-  from?: { context?: { pct: number; at: number }; week?: { pct: number; at: number } }
+  from?: { context?: { pct: number; at: number }; five?: { pct: number; at: number }; week?: { pct: number; at: number } }
 }
 
 // ─── tokens.json ────────────────────────────────────────────────────────────
@@ -63,7 +70,7 @@ const LEVEL = {
 export const meterLevel = (pct: number): Level => (pct >= 85 ? 'hot' : pct >= 60 ? 'warn' : 'ok')
 
 const W = 720
-const H = 176
+const H = 148
 const R = 22
 const PAD = { top: 22, right: 26, bottom: 22, left: 24 }
 const LOGO = 80
@@ -124,6 +131,7 @@ const icon = (paths: string, x: number, y: number, size: number, stroke: string,
   `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
 const ICON_CLOCK = `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`
 const ICON_STEPS = `<path d="M3 20h5v-5h5v-5h5V5h3"/>`
+const ICON_COST = `<circle cx="12" cy="12" r="9"/><path d="M14.8 9.2a3 3 0 0 0-2.8-1.7c-1.7 0-3 .9-3 2.2 0 3.1 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2a3.2 3.2 0 0 1-3-1.8M12 6v1.5M12 16.5V18"/>`
 const ICON_RESET = `<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/>`
 
 /** A loop's delay so it shows the frame the wall clock says it is on. */
@@ -227,6 +235,9 @@ function liveClock(from: number): { chars: number; svg: (x: number, y: number, a
   }
 }
 
+/** How long the delivery on Done takes: ride in, drop the box, ride off. */
+export const DELIVER_MS = 3600
+
 /** How long the drive-by takes, from one side of the card to the other. */
 export const RIDE_MS = 3400
 
@@ -244,7 +255,7 @@ export function cardSvg(d: CardData): string {
   const mainX = logoX + LOGO + GAP_LOGO
   const mainRight = W - 1 - PAD.right
   const mainW = mainRight - mainX
-  const mainH = 24 + 11 + 22 + 16 + (15 + 7 + 6 + 7 + 14)
+  const mainH = 24 + 20 + (15 + 8 + 4 + 8 + 14)
   const top = contentTop + (contentH - mainH) / 2
 
   // ── Header: pill + "Presto mode", then clock · steps on the right.
@@ -266,7 +277,11 @@ export function cardSvg(d: CardData): string {
   const stepsText = `${d.steps} steps`
   const metaBase = baseline(headMid - 7.5, 15, 12, true)
   const stepsW = monoWidth(stepsText, 12)
-  const stepsTextX = mainRight - stepsW
+  const costW = d.cost === undefined ? 0 : monoWidth(d.cost, 12)
+  const costTextX = mainRight - costW
+  const costIconX = costTextX - 6 - 13
+  const costSep = costIconX - 14 - 1.5
+  const stepsTextX = d.cost === undefined ? mainRight - stepsW : costSep - 1.5 - 14 - stepsW
   const stepsIconX = stepsTextX - 6 - 13
   const sepCx = stepsIconX - 14 - 1.5
   const live = d.liveFrom === undefined ? null : liveClock(d.liveFrom)
@@ -280,18 +295,18 @@ export function cardSvg(d: CardData): string {
       : `<text x="${elapsedX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(d.elapsed)}</text>`) +
     `<circle cx="${sepCx}" cy="${headMid}" r="1.5" fill="${C.separator}"/>` +
     icon(ICON_STEPS, stepsIconX, headMid - 6.5, 13, C.textSubtle, 2) +
-    `<text x="${stepsTextX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(stepsText)}</text>`
+    `<text x="${stepsTextX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(stepsText)}</text>` +
+    (d.cost === undefined
+      ? ''
+      : `<circle cx="${costSep}" cy="${headMid}" r="1.5" fill="${C.separator}"/>` +
+        icon(ICON_COST, costIconX, headMid - 6.5, 13, C.textSubtle, 2) +
+        `<text x="${costTextX}" y="${metaBase}" font-family="${MONO}" font-size="12" font-weight="500" fill="${C.meta}" style="font-variant-numeric:tabular-nums">${esc(d.cost)}</text>`)
 
-  // ── Title: one line, ellipsis; the full text on hover.
-  const titleTop = top + 24 + 11
-  const title = truncate(d.task.replace(/\s+/g, ' ').trim(), mainW, 17, 600, -0.012)
-  const titleEl =
-    `<text x="${mainX}" y="${baseline(titleTop, 22, 17)}" font-family="${SANS}" font-size="17" font-weight="600" letter-spacing="-0.204" fill="${C.text}"><title>${esc(d.task)}</title>${esc(title)}</text>`
-
-  // ── Meters: two equal columns, 28 apart.
-  const metersTop = titleTop + 22 + 16
-  const colW = (mainW - 28) / 2
-  const meter = (key: 'context' | 'week', x: number, pctRaw: number) => {
+  // ── Meters: three equal columns, 24 apart.
+  const metersTop = top + 24 + 20
+  const GAP = 24
+  const colW = (mainW - 2 * GAP) / 3
+  const meter = (key: 'context' | 'five' | 'week', x: number, pctRaw: number, resets?: string) => {
     const pct = Math.max(0, Math.min(100, Math.round(pctRaw)))
     const lv = meterLevel(pct)
     const L = LEVEL[lv]
@@ -299,7 +314,7 @@ export function cardSvg(d: CardData): string {
     const fillW = (colW * pct) / 100
     const noteTop = trackY + 4 + 8
     const head =
-      `<text x="${x}" y="${baseline(metersTop, 15, 12)}" font-family="${SANS}" font-size="12" font-weight="500" fill="${C.textMuted}">${key === 'context' ? 'Context' : 'Week'}</text>` +
+      `<text x="${x}" y="${baseline(metersTop, 15, 12)}" font-family="${SANS}" font-size="12" font-weight="500" fill="${C.textMuted}">${{ context: 'Context', five: '5-hour', week: 'Week' }[key]}</text>` +
       `<text x="${x + colW}" y="${baseline(metersTop, 15, 12.5, true)}" text-anchor="end" font-family="${MONO}" font-size="12.5" font-weight="600" fill="${L.value}" style="font-variant-numeric:tabular-nums">${pct}<tspan fill="${C.textSubtle}" font-weight="500">%</tspan></text>`
 
     // The fill eases from the last value to this one over 0.6 s.
@@ -331,13 +346,14 @@ export function cardSvg(d: CardData): string {
             const color = lv === 'ok' ? C.textSubtle : L.noteColor
             return (
               icon(ICON_RESET, x, noteTop + 1.5, 11, color, 2.2) +
-              `<text x="${x + 11 + 5}" y="${noteBase}" font-family="${SANS}" font-size="11.5" font-weight="400" fill="${color}">Resets ${esc(d.resets)}</text>`
+              `<text x="${x + 11 + 5}" y="${noteBase}" font-family="${SANS}" font-size="11.5" font-weight="400" fill="${color}">Resets ${esc(resets ?? '—')}</text>`
             )
           })()
     return { svg: head + track + note, css: moveCss }
   }
   const ctx = meter('context', mainX, d.context)
-  const wk = meter('week', mainX + colW + 28, d.week)
+  const five = meter('five', mainX + colW + GAP, d.fiveHour, d.fiveResets)
+  const wk = meter('week', mainX + 2 * (colW + GAP), d.week, d.resets)
 
   // ── The drive-by: right after a request is sent, Claude rides the bottom edge.
   const rideAge = d.sentAt === undefined ? Infinity : now - d.sentAt
@@ -345,6 +361,45 @@ export function cardSvg(d: CardData): string {
   const ride = riding
     ? `<g class="pm-ride" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${H - 33}) scale(.27)">${rider()}</g></g>`
     : ''
+
+  // ── The delivery: on Done, Claude rides in, parks under the logo, drops a
+  // Presto box that pops open in a burst of orange dots, and rides off.
+  const deliverAge = d.status === 'done' && d.doneAt !== undefined ? now - d.doneAt : Infinity
+  const delivering = deliverAge >= 0 && deliverAge < DELIVER_MS
+  const SC = 0.24
+  const riderW = 232 * SC
+  const parkX = logoX + LOGO / 2 - riderW / 2 + 4
+  const groundY = H - 4
+  const riderY = groundY - 112 * SC
+  const boxX = parkX - 8
+  const boxS = 15
+  const burst = Array.from({ length: 9 }, (_, i) => {
+    const a = (i / 9) * Math.PI * 2 - Math.PI / 2
+    const r = 16 + (i % 3) * 4
+    return `<circle class="pm-dot" cx="0" cy="0" r="${i % 2 ? 1.6 : 2.2}" fill="${i % 3 === 0 ? '#FFB547' : '#FF7A1A'}" style="--dx:${(Math.cos(a) * r).toFixed(1)}px;--dy:${(Math.sin(a) * r * 0.8).toFixed(1)}px"/>`
+  }).join('')
+  const deliver = delivering
+    ? `<g style="--d:${(-deliverAge / 1000).toFixed(3)}s">` +
+      `<g class="pm-dl-rider"><g transform="translate(0 ${riderY.toFixed(1)}) scale(${SC})">${rider()}</g></g>` +
+      `<g class="pm-dl-box" transform="translate(${boxX.toFixed(1)} ${(groundY - boxS).toFixed(1)})">` +
+      `<g class="pm-dl-boxin">` +
+      `<rect width="${boxS}" height="${boxS}" rx="2.5" fill="#FF3000"/><rect width="${boxS}" height="3.5" rx="1.5" fill="#FFFFFF" opacity=".18"/>` +
+      `<g transform="translate(3.6 2.6) scale(.017)"><g fill="none" stroke="#FFFFFF" stroke-width="58.8" stroke-linecap="round" stroke-linejoin="round"><path d="M173.2 100.4 L328.27 255.47 A88.7 88.7 0 0 1 202.83 380.91 L173.27 351.35"/><path d="M173 224.2 L261.3 312.5"/></g></g>` +
+      `</g>` +
+      `<g transform="translate(${boxS / 2} ${boxS / 2})">${burst}</g>` +
+      `</g>` +
+      `</g>`
+    : ''
+  const dl = DELIVER_MS
+  const deliverCss =
+    `.pm-dl-rider{animation:pm-dl-ride ${dl}ms linear var(--d) both}` +
+    `.pm-dl-boxin{transform-box:fill-box;transform-origin:50% 100%;animation:pm-dl-box ${dl}ms linear var(--d) both}` +
+    `.pm-dot{opacity:0;animation:pm-dl-dot ${dl}ms linear var(--d) both}` +
+    // 0–30% ride in (ease out), 30–62% parked, 62–100% ride off (ease in).
+    `@keyframes pm-dl-ride{0%{transform:translateX(-70px);animation-timing-function:cubic-bezier(.15,.7,.3,1)}30%{transform:translateX(${parkX.toFixed(1)}px)}62%{transform:translateX(${parkX.toFixed(1)}px);animation-timing-function:cubic-bezier(.6,0,.85,.3)}100%{transform:translateX(${W + 20}px)}}` +
+    // The box drops off the back at 34%, lands, pops at 52%, then shrinks away.
+    `@keyframes pm-dl-box{0%,33%{opacity:0;transform:translate(10px,-14px) scale(.7)}36%{opacity:1;transform:translate(4px,-10px) scale(.85)}42%{transform:translate(0,0) scale(1.08,.9)}46%{transform:scale(.96,1.05)}50%{transform:scale(1)}54%{transform:scale(1.18)}60%{opacity:1;transform:scale(1.04)}80%{opacity:1;transform:scale(1)}92%,100%{opacity:0;transform:scale(.6)}}` +
+    `@keyframes pm-dl-dot{0%,53%{opacity:0;transform:translate(0,0) scale(.4)}57%{opacity:1}75%{opacity:.9;transform:translate(var(--dx),var(--dy)) scale(1)}88%,100%{opacity:0;transform:translate(calc(var(--dx) * 1.25),calc(var(--dy) * 1.25 + 4px)) scale(.6)}}`
 
   const css =
     FONT_FACES +
@@ -358,14 +413,16 @@ export function cardSvg(d: CardData): string {
     `@keyframes pm-spin{to{transform:rotate(360deg)}}` +
     `@keyframes pm-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.2px)}}` +
     `@keyframes pm-puff{0%{transform:translateX(0);opacity:.9}100%{transform:translateX(-12px);opacity:0}}` +
+    (delivering ? deliverCss : '') +
     ctx.css +
+    five.css +
     wk.css +
-    `@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.pm-ride{display:none}}`
+    `@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.pm-ride,.pm-dl-rider,.pm-dl-box{display:none}}`
 
   // Ids unique to this drawing, so two cards on one page never share gradients.
   const u = `${d.status}${Math.round(d.context)}x${Math.round(d.week)}`
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Presto mode: ${esc(label)}. ${esc(d.task)}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Presto mode: ${esc(label)}">` +
     `<style>${css}</style>` +
     `<defs>` +
     `<linearGradient id="pmBorder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".13"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".06"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".04"/></linearGradient>` +
@@ -384,10 +441,10 @@ export function cardSvg(d: CardData): string {
     pill +
     tag +
     meta +
-    titleEl +
     ctx.svg +
+    five.svg +
     wk.svg +
-    `<g clip-path="url(#pmSurfaceClip)" pointer-events="none">${ride}</g>` +
+    `<g clip-path="url(#pmSurfaceClip)" pointer-events="none">${ride}${deliver}</g>` +
     `</svg>`
   return svg.replace(/(id="|url\(#)pm([A-Z])/g, `$1pm${u}$2`).replace(/(id="|url\(#)pmFill-/g, `$1pm${u}Fill-`).replace(/(id="|url\(#)pmClip-/g, `$1pm${u}Clip-`)
 }

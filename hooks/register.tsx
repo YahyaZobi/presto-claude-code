@@ -57,6 +57,17 @@ const clock = (ms: number) => {
 const pct = (n: number | undefined) => Math.max(0, Math.min(100, Math.round(n ?? 0)))
 
 /** "Tue 08:00 AM", in the viewer's own time zone. */
+const timeLabel = (iso?: string) => {
+  if (!iso) return '—'
+  try {
+    return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(iso))
+  } catch {
+    return '—'
+  }
+}
+
+const costLabel = (usd?: number) => (usd === undefined ? undefined : usd > 0 && usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`)
+
 const resetsLabel = (iso?: string) => {
   if (!iso) return '—'
   try {
@@ -92,7 +103,7 @@ export const register: Register = on => {
   let tick = 0
   let bandId: string | undefined
   // The meters' last values and when they changed, so a change eases in.
-  const meters: Record<'context' | 'week', { pct: number; from?: { pct: number; at: number } } | undefined> = { context: undefined, week: undefined }
+  const meters: Record<'context' | 'five' | 'week', { pct: number; from?: { pct: number; at: number } } | undefined> = { context: undefined, five: undefined, week: undefined }
   // The last card drawn. It is drawn as an image (not an interactive frame, which goes
   // blank while it reloads), and rebuilt only when something it shows changes; a
   // running clock counts up inside the SVG between rebuilds.
@@ -109,7 +120,7 @@ export const register: Register = on => {
       if (unpainted !== undefined) $.ui.toast(`presto: ${unpainted}`)
       await $.theme.set(LOOK)
       const u = await $.session.usage()
-      await update($, usage, () => toUsage(u.context.percent, u.rateLimits))
+      await update($, usage, () => toUsage(u.context.percent, u.rateLimits, u.cost?.usd))
     } catch {}
     return next(e)
   })
@@ -192,7 +203,7 @@ export const register: Register = on => {
 
   on('session.measure', async ($, e, next) => {
     try {
-      await update($, usage, () => toUsage(e.context.percent, e.rateLimits))
+      await update($, usage, () => toUsage(e.context.percent, e.rateLimits, e.cost?.usd))
     } catch {}
     return next(e)
   })
@@ -236,6 +247,9 @@ export const register: Register = on => {
     const context = pct(u.context)
     const week = pct(u.week?.percent)
     const resets = resetsLabel(u.week?.resetsAt)
+    const fiveHour = pct(u.fiveHour?.percent)
+    const fiveResets = timeLabel(u.fiveHour?.resetsAt)
+    const cost = costLabel(u.cost)
 
     const { Box, Text } = $.ui.resolve(e)
 
@@ -252,14 +266,19 @@ export const register: Register = on => {
             <Text wrap="truncate-end">
               <Text color={tone} weight="bold">● {label}</Text>
               <Text color="#FF5C2E" weight="bold">  Presto</Text>
-              <Text dimColor> mode · {elapsed} · {steps} steps</Text>
+              <Text dimColor> mode · {elapsed} · {steps} steps{cost === undefined ? '' : ` · ${cost}`}</Text>
             </Text>
-            <Text wrap="truncate-end" weight="bold">{task}</Text>
             <Text wrap="truncate-end">
               <Text dimColor>Context </Text>
               <Text color={meterColor(context)}>{bar(context)}</Text>
               <Text weight="bold" tabular> {context}%</Text>
-              <Text dimColor> {NOTE[meterLevel(context)]}   Week </Text>
+              <Text dimColor> {NOTE[meterLevel(context)]}   5-hour </Text>
+              <Text color={meterColor(fiveHour)}>{bar(fiveHour)}</Text>
+              <Text weight="bold" tabular> {fiveHour}%</Text>
+              <Text dimColor> Resets {fiveResets}</Text>
+            </Text>
+            <Text wrap="truncate-end">
+              <Text dimColor>Week </Text>
               <Text color={meterColor(week)}>{bar(week)}</Text>
               <Text weight="bold" tabular> {week}%</Text>
               <Text dimColor> Resets {resets}</Text>
@@ -271,10 +290,10 @@ export const register: Register = on => {
 
     // ── Desktop and VS Code: the hand-off card, drawn as one SVG.
     const runFor = live && j !== null ? (now - j.startedAt) / 1000 : undefined
-    const key = JSON.stringify([e.surface, status, label, task, steps, context, week, resets, j?.startedAt ?? null, runFor === undefined ? elapsed : clockShape(runFor)])
+    const key = JSON.stringify([e.surface, status, label, task, steps, context, fiveHour, fiveResets, week, resets, cost ?? null, j?.startedAt ?? null, runFor === undefined ? elapsed : clockShape(runFor)])
     if (card === undefined || card.key !== key) {
-      const from: { context?: { pct: number; at: number }; week?: { pct: number; at: number } } = {}
-      for (const [name, value] of [['context', context], ['week', week]] as const) {
+      const from: { context?: { pct: number; at: number }; five?: { pct: number; at: number }; week?: { pct: number; at: number } } = {}
+      for (const [name, value] of [['context', context], ['five', fiveHour], ['week', week]] as const) {
         const m = meters[name]
         if (m === undefined) meters[name] = { pct: value }
         else if (m.pct !== value) meters[name] = { pct: value, from: { pct: m.pct, at: now } }
@@ -284,8 +303,8 @@ export const register: Register = on => {
       const sentAt = j?.startedAt
       card = {
         key,
-        source: cardSvg({ status, label, task, elapsed, steps, context, week, resets, now, ...(sentAt !== undefined ? { sentAt } : {}), ...(runFor !== undefined ? { liveFrom: runFor } : {}), from }),
-        alt: `Presto mode. ${label}: ${task}. ${runFor === undefined ? `${elapsed}, ` : ''}${steps} steps. Context ${context}%, week ${week}%, resets ${resets}.`,
+        source: cardSvg({ status, label, task, elapsed, steps, context, fiveHour, fiveResets, week, resets, now, ...(cost !== undefined ? { cost } : {}), ...(j?.endedAt ? { doneAt: j.endedAt } : {}), ...(sentAt !== undefined ? { sentAt } : {}), ...(runFor !== undefined ? { liveFrom: runFor } : {}), from }),
+        alt: `Presto mode. ${label}. ${runFor === undefined ? `${elapsed}, ` : ''}${steps} steps${cost === undefined ? '' : `, ${cost}`}. Context ${context}%, 5-hour ${fiveHour}% (resets ${fiveResets}), week ${week}% (resets ${resets}).`,
       }
     }
 
@@ -299,12 +318,13 @@ export const register: Register = on => {
   })
 }
 
-function toUsage(contextPercent: number | undefined, limits: readonly { kind: string; percentUsed: number; resetsAt?: string }[]): Usage {
+function toUsage(contextPercent: number | undefined, limits: readonly { kind: string; percentUsed: number; resetsAt?: string }[], usd?: number): Usage {
   const five = limits.find(l => l.kind === 'five_hour')
   const week = limits.find(l => l.kind === 'seven_day')
   return {
     ...(contextPercent === undefined ? {} : { context: contextPercent }),
     ...(five ? { fiveHour: { percent: five.percentUsed, ...(five.resetsAt ? { resetsAt: five.resetsAt } : {}) } } : {}),
     ...(week ? { week: { percent: week.percentUsed, ...(week.resetsAt ? { resetsAt: week.resetsAt } : {}) } } : {}),
+    ...(usd === undefined ? {} : { cost: usd }),
   }
 }
