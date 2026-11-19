@@ -24,6 +24,11 @@ export type CardData = {
   resets: string
   /** What the session has cost so far ("$1.84"); absent, no cost is shown. */
   cost?: string
+  /**
+   * Where the logo sits: `tile`, the 80 px tile on the left; `compact`, a 56 px
+   * tile; `inline`, a small badge in the header so the meters take the full width.
+   */
+  logo?: 'tile' | 'compact' | 'inline'
   /** When the request finished, in ms: on Done, Claude delivers a Presto box. */
   doneAt?: number
   /** The wall clock, in ms: phases every loop. */
@@ -70,11 +75,9 @@ const LEVEL = {
 export const meterLevel = (pct: number): Level => (pct >= 85 ? 'hot' : pct >= 60 ? 'warn' : 'ok')
 
 const W = 720
-const H = 148
+const H_TILE = 148
 const R = 22
 const PAD = { top: 22, right: 26, bottom: 22, left: 24 }
-const LOGO = 80
-const GAP_LOGO = 22
 const SANS = `Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif`
 const MONO = `'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace`
 
@@ -247,8 +250,13 @@ export function cardSvg(d: CardData): string {
   const now = d.now
 
   // Content box: logo, then the main column, centred in the padded area.
-  const contentTop = 1 + PAD.top
-  const contentH = H - 2 - PAD.top - PAD.bottom
+  const mode = d.logo ?? 'inline'
+  const LOGO = mode === 'tile' ? 80 : mode === 'compact' ? 56 : 0
+  const GAP_LOGO = mode === 'tile' ? 22 : mode === 'compact' ? 20 : 0
+  const mainBlockH = 24 + 20 + (15 + 8 + 4 + 8 + 14)
+  const H = mode === 'tile' ? H_TILE : mainBlockH + 2 + 2 * 20
+  const contentTop = 1 + (mode === 'tile' ? PAD.top : 20)
+  const contentH = H - 2 - (mode === 'tile' ? PAD.top + PAD.bottom : 40)
   const logoX = 1 + PAD.left
   const logoY = contentTop + (contentH - LOGO) / 2
   const mainX = logoX + LOGO + GAP_LOGO
@@ -261,14 +269,21 @@ export function cardSvg(d: CardData): string {
   const headMid = top + 12
   const pillLabelW = measure(label, 11.5, 600, 0.02)
   const pillW = 9 + 7 + 8 + pillLabelW + 11
-  const dotCx = mainX + 9 + 3.5
+  const BADGE = 22
+  const tagW = measure('Presto', 12, 600) + measure(' mode', 12, 500)
+  const tagX = mode === 'inline' ? mainX + BADGE + 9 : mainX + pillW + 10
+  const pillX = mode === 'inline' ? tagX + tagW + 14 : mainX
+  const badge =
+    mode === 'inline'
+      ? `<g filter="url(#pmBadgeShadow)"><svg x="${mainX}" y="${headMid - BADGE / 2}" width="${BADGE}" height="${BADGE}" viewBox="0 0 512 512">${LOGO_SVG.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg></g>`
+      : ''
+  const dotCx = pillX + 9 + 3.5
   const pill =
-    `<rect x="${mainX}" y="${top}" width="${pillW}" height="24" rx="12" fill="${s.bg}"/>` +
-    `<rect x="${mainX + 0.5}" y="${top + 0.5}" width="${pillW - 1}" height="23" rx="11.5" fill="none" stroke="${s.ring}" stroke-opacity=".6"/>` +
+    `<rect x="${pillX}" y="${top}" width="${pillW}" height="24" rx="12" fill="${s.bg}"/>` +
+    `<rect x="${pillX + 0.5}" y="${top + 0.5}" width="${pillW - 1}" height="23" rx="11.5" fill="none" stroke="${s.ring}" stroke-opacity=".6"/>` +
     (s.pulse ? `<circle class="pm-pulse" cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}" style="animation-delay:${phase(now, 1800)}"/>` : '') +
     `<circle cx="${dotCx}" cy="${headMid}" r="3.5" fill="${s.tone}"/>` +
-    `<text x="${mainX + 9 + 7 + 8}" y="${baseline(top, 24, 11.5) + 0.2}" font-family="${SANS}" font-size="11.5" font-weight="600" letter-spacing="0.23" fill="${s.text}">${esc(label)}</text>`
-  const tagX = mainX + pillW + 10
+    `<text x="${pillX + 9 + 7 + 8}" y="${baseline(top, 24, 11.5) + 0.2}" font-family="${SANS}" font-size="11.5" font-weight="600" letter-spacing="0.23" fill="${s.text}">${esc(label)}</text>`
   const tag =
     `<text x="${tagX}" y="${baseline(headMid - 7.5, 15, 12)}" font-family="${SANS}" font-size="12">` +
     `<tspan font-weight="600" fill="${C.brandTag}">Presto</tspan><tspan font-weight="500" fill="${C.textSubtle}"> mode</tspan></text>`
@@ -358,24 +373,33 @@ export function cardSvg(d: CardData): string {
   const five = meter('five', mainX + colW + GAP, d.fiveHour, d.fiveResets)
   const wk = meter('week', mainX + 2 * (colW + GAP), d.week, d.resets)
 
-  // ── The drive-by: right after a request is sent, Claude rides the bottom edge.
+  // ── The rider's lane. Inline: the header's empty stretch, on the hairline.
+  const lane = mode === 'inline'
+  const SC = lane ? 0.2 : 0.24
+  const riderW = 232 * SC
+  const laneL = pillX + pillW + 18
+  const laneR = clockX - 18
+  const laneOk = !lane || laneR - laneL >= riderW * 2 + 20
+  const laneGround = top + 24 + 10
+
+  // ── The drive-by: right after a request is sent, Claude rides by.
   const rideAge = d.sentAt === undefined ? Infinity : now - d.sentAt
-  const riding = rideAge >= 0 && rideAge < RIDE_MS
+  const riding = laneOk && rideAge >= 0 && rideAge < RIDE_MS
   const ride = riding
-    ? `<g class="pm-ride" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${H - 33}) scale(.27)">${rider()}</g></g>`
+    ? lane
+      ? `<g class="pm-ride-lane" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${(laneGround - 112 * SC).toFixed(1)}) scale(${SC})">${rider()}</g></g>`
+      : `<g class="pm-ride" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${H - 33}) scale(.27)">${rider()}</g></g>`
     : ''
 
   // ── The delivery: on Done, Claude rides in, parks under the logo, drops a
   // Presto box that pops open in a burst of orange dots, and rides off.
   const deliverAge = d.status === 'done' && d.doneAt !== undefined ? now - d.doneAt : Infinity
-  const delivering = deliverAge >= 0 && deliverAge < DELIVER_MS
-  const SC = 0.24
-  const riderW = 232 * SC
-  const parkX = logoX + LOGO / 2 - riderW / 2 + 4
-  const groundY = H - 4
+  const delivering = laneOk && deliverAge >= 0 && deliverAge < DELIVER_MS
+  const parkX = lane ? (laneL + laneR) / 2 - riderW / 2 + 8 : logoX + LOGO / 2 - riderW / 2 + 4
+  const groundY = lane ? laneGround : H - 4
   const riderY = groundY - 112 * SC
-  const boxX = parkX - 8
-  const boxS = 15
+  const boxS = lane ? 13 : 15
+  const boxX = parkX - boxS - 3
   const burst = Array.from({ length: 9 }, (_, i) => {
     const a = (i / 9) * Math.PI * 2 - Math.PI / 2
     const r = 16 + (i % 3) * 4
@@ -399,7 +423,9 @@ export function cardSvg(d: CardData): string {
     `.pm-dl-boxin{transform-box:fill-box;transform-origin:50% 100%;animation:pm-dl-box ${dl}ms linear var(--d) both}` +
     `.pm-dot{opacity:0;animation:pm-dl-dot ${dl}ms linear var(--d) both}` +
     // 0–30% ride in (ease out), 30–62% parked, 62–100% ride off (ease in).
-    `@keyframes pm-dl-ride{0%{transform:translateX(-70px);animation-timing-function:cubic-bezier(.15,.7,.3,1)}30%{transform:translateX(${parkX.toFixed(1)}px)}62%{transform:translateX(${parkX.toFixed(1)}px);animation-timing-function:cubic-bezier(.6,0,.85,.3)}100%{transform:translateX(${W + 20}px)}}` +
+    (lane
+      ? `@keyframes pm-dl-ride{0%{opacity:0;transform:translateX(${laneL.toFixed(1)}px);animation-timing-function:cubic-bezier(.15,.7,.3,1)}8%{opacity:1}30%{transform:translateX(${parkX.toFixed(1)}px)}62%{opacity:1;transform:translateX(${parkX.toFixed(1)}px);animation-timing-function:cubic-bezier(.6,0,.85,.3)}92%{opacity:1}100%{opacity:0;transform:translateX(${(laneR - riderW).toFixed(1)}px)}}`
+      : `@keyframes pm-dl-ride{0%{transform:translateX(-70px);animation-timing-function:cubic-bezier(.15,.7,.3,1)}30%{transform:translateX(${parkX.toFixed(1)}px)}62%{transform:translateX(${parkX.toFixed(1)}px);animation-timing-function:cubic-bezier(.6,0,.85,.3)}100%{transform:translateX(${W + 20}px)}}`) +
     // The box drops off the back at 34%, lands, pops at 52%, then shrinks away.
     `@keyframes pm-dl-box{0%,33%{opacity:0;transform:translate(10px,-14px) scale(.7)}36%{opacity:1;transform:translate(4px,-10px) scale(.85)}42%{transform:translate(0,0) scale(1.08,.9)}46%{transform:scale(.96,1.05)}50%{transform:scale(1)}54%{transform:scale(1.18)}60%{opacity:1;transform:scale(1.04)}80%{opacity:1;transform:scale(1)}92%,100%{opacity:0;transform:scale(.6)}}` +
     `@keyframes pm-dl-dot{0%,53%{opacity:0;transform:translate(0,0) scale(.4)}57%{opacity:1}75%{opacity:.9;transform:translate(var(--dx),var(--dy)) scale(1)}88%,100%{opacity:0;transform:translate(calc(var(--dx) * 1.25),calc(var(--dy) * 1.25 + 4px)) scale(.6)}}`
@@ -408,6 +434,8 @@ export function cardSvg(d: CardData): string {
     FONT_FACES +
     `.pm-pulse{transform-box:fill-box;transform-origin:center;opacity:0;animation:pm-pulse 1.8s cubic-bezier(.2,.6,.3,1) infinite}` +
     `.pm-ride{animation:pm-ride ${RIDE_MS}ms cubic-bezier(.45,.05,.4,1) both}` +
+    `.pm-ride-lane{animation:pm-ride-lane ${RIDE_MS}ms cubic-bezier(.45,.05,.4,1) both}` +
+    `@keyframes pm-ride-lane{0%{opacity:0;transform:translateX(${laneL.toFixed(1)}px)}12%{opacity:1}88%{opacity:1}100%{opacity:0;transform:translateX(${(laneR - riderW).toFixed(1)}px)}}` +
     `.pm-spin{animation:pm-spin .4s linear infinite}` +
     `.pm-bob{animation:pm-bob .45s ease-in-out infinite}` +
     `.pm-puff{animation:pm-puff .6s ease-out infinite}` +
@@ -420,7 +448,7 @@ export function cardSvg(d: CardData): string {
     ctx.css +
     five.css +
     wk.css +
-    `@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.pm-ride,.pm-dl-rider,.pm-dl-box{display:none}}`
+    `@media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}.pm-ride,.pm-ride-lane,.pm-dl-rider,.pm-dl-box{display:none}}`
 
   // Ids unique to this drawing, so two cards on one page never share gradients.
   const u = `${d.status}${Math.round(d.context)}x${Math.round(d.week)}`
@@ -432,6 +460,7 @@ export function cardSvg(d: CardData): string {
     `<linearGradient id="pmSurface" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${C.surfaceHigh}"/><stop offset="1" stop-color="${C.surface}"/></linearGradient>` +
     `<radialGradient id="pmLight" gradientUnits="userSpaceOnUse" cx="${W * 0.62}" cy="-40" r="${W * 0.55}" gradientTransform="translate(0 -40) scale(1 .45) translate(0 40)"><stop offset="0" stop-color="#FF5C2E" stop-opacity=".09"/><stop offset="1" stop-color="#FF5C2E" stop-opacity="0"/></radialGradient>` +
     `<clipPath id="pmSurfaceClip"><rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}"/></clipPath>` +
+    `<filter id="pmBadgeShadow" x="-40%" y="-40%" width="180%" height="190%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000" flood-opacity=".45"/></filter>` +
     `<filter id="pmLogoShadow" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#000" flood-opacity=".45"/><feDropShadow dx="0" dy="1" stdDeviation=".75" flood-color="#000" flood-opacity=".35"/></filter>` +
     `</defs>` +
     // 1. Border shell over the surface colour; 2. the surface.
@@ -440,7 +469,7 @@ export function cardSvg(d: CardData): string {
     `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}" fill="url(#pmSurface)"/>` +
     // A soft warm light from above, kept clear of the logo.
     `<rect x="1" y="1" width="${W - 2}" height="${H - 2}" rx="${R - 1}" fill="url(#pmLight)" pointer-events="none"/>` +
-    `<g filter="url(#pmLogoShadow)"><svg x="${logoX}" y="${logoY}" width="${LOGO}" height="${LOGO}" viewBox="0 0 512 512">${LOGO_SVG.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg></g>` +
+    (mode === 'inline' ? badge : `<g filter="url(#pmLogoShadow)"><svg x="${logoX}" y="${logoY}" width="${LOGO}" height="${LOGO}" viewBox="0 0 512 512">${LOGO_SVG.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg></g>`) +
     pill +
     tag +
     meta +

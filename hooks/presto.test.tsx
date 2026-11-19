@@ -53,7 +53,7 @@ test('a request becomes the card: working, steps, then done', async ($, on) => {
   expect(w).toContain('2 steps')
   expect(w).toContain('Presto</tspan>')
   expect(w).toContain('#FF4A1A')
-  expect(w).toContain('class="pm-ride"')
+  expect(w).toContain('class="pm-ride-lane"')
   await working.unmount()
 
   await $.turn.complete({ answer: 'done', durationMs: 4000, isAborted: false, turnId: 't1', reason: 'answer' })
