@@ -5,6 +5,7 @@
 // clock (a negative animation-delay of `now % period`), so a redraw lands on
 // the same frame the last one was showing: updates never restart the motion.
 
+import { riderArt, riderCss } from './rider'
 import { FONT_FACES, INTER_METRICS, INTER_WIDTHS, MONO_ADVANCE, MONO_METRICS } from './fonts'
 
 export type CardStatus = 'working' | 'input' | 'done' | 'error'
@@ -157,50 +158,8 @@ const ICON_RESET = `<path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5
 /** A loop's delay so it shows the frame the wall clock says it is on. */
 const phase = (now: number, periodMs: number) => `${(-(now % periodMs) / 1000).toFixed(3)}s`
 
-// ─── The rider: Claude's mascot on a Presto scooter, facing right ───────────
-// 232 x 120 units; drawn small, it drives along the card's bottom edge right
-// after a request is sent, and its wheels turn.
-function rider(): string {
-  const wheel = (cx: number) =>
-    `<circle cx="${cx}" cy="100" r="17" fill="#141218"/><circle cx="${cx}" cy="100" r="10.5" fill="#C9CED5"/>` +
-    `<g class="pm-spin" style="transform-origin:${cx}px 100px">` +
-    [0, 72, 144, 216, 288].map(a => `<path d="M${cx} 97 L${cx - 1.6} 91 L${cx + 1.6} 91 Z" fill="#7E848D" transform="rotate(${a} ${cx} 100)"/>`).join('') +
-    `</g><circle cx="${cx}" cy="100" r="3.2" fill="#5D636B"/>`
-  return (
-    `<g class="pm-puff" fill="#3A343D"><circle cx="35" cy="100" r="4"/><circle cx="26" cy="97" r="3"/><circle cx="18" cy="100" r="2"/></g>` +
-    `<path d="M22 66 L78 66 L86 72" fill="none" stroke="#7E848D" stroke-width="2.6" stroke-linecap="round"/>` +
-    `<rect x="14" y="20" width="60" height="46" rx="5" fill="#FF3000"/><rect x="14" y="20" width="60" height="8" rx="4" fill="#FFFFFF" opacity=".12"/>` +
-    `<rect x="14" y="58" width="60" height="2.4" fill="#FFFFFF" opacity=".5"/>` +
-    `<g transform="translate(27 26) scale(.062)"><g fill="none" stroke="#FFFFFF" stroke-width="58.8" stroke-linecap="round" stroke-linejoin="round"><path d="M173.2 100.4 L328.27 255.47 A88.7 88.7 0 0 1 202.83 380.91 L173.27 351.35"/><path d="M173 224.2 L261.3 312.5"/></g><g fill="#FF8E00"><circle cx="173" cy="100.3" r="29.2"/><circle cx="261.4" cy="312.7" r="29.2"/><circle cx="173" cy="351.2" r="29.2"/></g></g>` +
-    `<g class="pm-bob">` +
-    `<path d="M108 60 L131 60 L139 87" fill="none" stroke="#D97757" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>` +
-    `<path d="M133 84.5 h13 a4 4 0 0 1 0 7 h-15 z" fill="#141218"/>` +
-    `<g transform="rotate(-7 104 44)">` +
-    `<rect x="86" y="25" width="38" height="37" rx="6" fill="#D97757"/>` +
-    `<rect x="108" y="36" width="4.2" height="8.5" rx="1.4" fill="#141218"/><rect x="116" y="36" width="4.2" height="8.5" rx="1.4" fill="#141218"/>` +
-    `<path d="M82 31 C82 13 95 7 106 7 C120 7 129 16 129 31 Z" fill="#FF3000"/>` +
-    `<path d="M96 9.5 C99.5 8.2 102.5 7.6 105 7.4 L105.5 31 L99 31 Z" fill="#FFFFFF" opacity=".92"/>` +
-    `<path d="M114 14 C122 16.5 128 22.5 129 31 L113 31 Z" fill="#20232C" opacity=".9"/>` +
-    `<rect x="81" y="29" width="49" height="4.2" rx="2.1" fill="#9E1C00"/>` +
-    `</g>` +
-    `<path d="M113 45 Q139 50 161 37.5" fill="none" stroke="#D97757" stroke-width="6" stroke-linecap="round"/>` +
-    `</g>` +
-    `<rect x="42" y="96" width="42" height="7.5" rx="3.75" fill="#C9CED5"/>` +
-    `<path d="M35 93 C33 76 46 63 71 62.5 L121 62.5 C131 62.5 133 72 130 82 L125 95 Z" fill="#FF3000"/>` +
-    `<path d="M44 76 C50 68.5 62 66 77 66 L106 66" fill="none" stroke="#FFFFFF" stroke-width="2.6" opacity=".4" stroke-linecap="round"/>` +
-    `<path d="M66 55.5 L124 55.5 C131 55.5 131 64.5 124 64.5 L66 64.5 C59 64.5 59 55.5 66 55.5 Z" fill="#141218"/>` +
-    `<path d="M121 90.5 L160 90.5 L158 98 L119 98 Z" fill="#B21F00"/>` +
-    `<path d="M147 98 L162 98 C172 80 178 60 180.5 37.5 L171 36 C168 58 160 78 147 92 Z" fill="#FF3000"/>` +
-    `<path d="M178 46 L194 99" stroke="#C9CED5" stroke-width="4.2" stroke-linecap="round"/>` +
-    `<path d="M176 88.5 C182 74 206 74 212.5 88.5 L208.5 90.5 C202 80.5 186 80.5 180 90.5 Z" fill="#FF3000"/>` +
-    `<path d="M189 38 L236 24 L236 52 Z" fill="#FFF3C4" opacity=".16"/>` +
-    `<rect x="165.5" y="31.5" width="21" height="9.5" rx="4.75" fill="#FF3000"/><ellipse cx="187" cy="38" rx="4.2" ry="4.6" fill="#FFF3C4"/>` +
-    `<path d="M172 32 L167.5 18" stroke="#7E848D" stroke-width="2" stroke-linecap="round"/><ellipse cx="166.5" cy="15" rx="5.2" ry="3.6" fill="#141218"/>` +
-    `<rect x="155.5" y="34" width="12" height="6" rx="3" fill="#141218"/>` +
-    wheel(62) +
-    wheel(194)
-  )
-}
+// ─── The rider: Claude's mascot on a Presto scooter (hooks/rider.ts) ───────
+const rider = (moving: boolean) => riderArt({ c: 'pm-', id: 'pmR', moving })
 
 /**
  * Which layout the running clock is in: "9s", "59s", "9m 59s", "99m 59s", and so
@@ -422,7 +381,7 @@ export function cardSvg(d: CardData): string {
 
   // ── The rider's lane. Inline: the header's empty stretch, on the hairline.
   const lane = mode === 'inline'
-  const SC = lane ? 0.2 : 0.24
+  const SC = lane ? 0.23 : 0.26
   const riderW = 232 * SC
   const laneL = pillX + pillW + 18
   const laneR = clockX - 18
@@ -434,8 +393,8 @@ export function cardSvg(d: CardData): string {
   const riding = laneOk && rideAge >= 0 && rideAge < RIDE_MS
   const ride = riding
     ? lane
-      ? `<g class="pm-ride-lane" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${(laneGround - 112 * SC).toFixed(1)}) scale(${SC})">${rider()}</g></g>`
-      : `<g class="pm-ride" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${H - 33}) scale(.27)">${rider()}</g></g>`
+      ? `<g class="pm-ride-lane" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${(laneGround - 112 * SC).toFixed(1)}) scale(${SC})">${rider(true)}</g></g>`
+      : `<g class="pm-ride" style="animation-delay:${(-rideAge / 1000).toFixed(3)}s"><g transform="translate(0 ${H - 33}) scale(.27)">${rider(true)}</g></g>`
     : ''
 
   // ── The delivery: on Done, Claude rides in, parks under the logo, drops a
@@ -445,22 +404,36 @@ export function cardSvg(d: CardData): string {
   const parkX = lane ? (laneL + laneR) / 2 - riderW / 2 + 8 : logoX + LOGO / 2 - riderW / 2 + 4
   const groundY = lane ? laneGround : H - 4
   const riderY = groundY - 112 * SC
-  const boxS = lane ? 13 : 15
+  const boxS = lane ? 14 : 16
   const boxX = parkX - boxS - 3
   const burst = Array.from({ length: 9 }, (_, i) => {
     const a = (i / 9) * Math.PI * 2 - Math.PI / 2
     const r = 16 + (i % 3) * 4
     return `<circle class="pm-dot" cx="0" cy="0" r="${i % 2 ? 1.6 : 2.2}" fill="${i % 3 === 0 ? '#FFB547' : '#FF7A1A'}" style="--dx:${(Math.cos(a) * r).toFixed(1)}px;--dy:${(Math.sin(a) * r * 0.8).toFixed(1)}px"/>`
   }).join('')
+  const bx = boxS
+  const deliverBox =
+    `<rect x="0" y="0" width="${bx}" height="${bx}" rx="2.6" fill="#8F1A00"/>` +
+    `<rect x="0" y="0" width="${bx - 1.2}" height="${bx - 0.8}" rx="2.6" fill="#FF3000"/>` +
+    `<path d="M2.6 0 H${bx - 3.8} a2.6 2.6 0 0 1 2.6 2.6 V3.6 H0 V2.6 A2.6 2.6 0 0 1 2.6 0 Z" fill="#FF6A3D"/>` +
+    `<rect x="0" y="3.6" width="${bx - 1.2}" height=".7" fill="#8F1A00" opacity=".7"/>` +
+    `<g transform="translate(${(bx - 1.2) / 2 - 4.6} 4.4) scale(.019)"><g fill="none" stroke="#FFFFFF" stroke-width="58.8" stroke-linecap="round" stroke-linejoin="round"><path d="M173.2 100.4 L328.27 255.47 A88.7 88.7 0 0 1 202.83 380.91 L173.27 351.35"/><path d="M173 224.2 L261.3 312.5"/></g><g fill="#FF8E00"><circle cx="173" cy="100.3" r="29.2"/><circle cx="261.4" cy="312.7" r="29.2"/><circle cx="173" cy="351.2" r="29.2"/></g></g>`
+  const dust = [-1, 1]
+    .map(k => `<circle class="pm-dust" cx="${bx / 2 + k * (bx / 2 - 1)}" cy="${bx - 1}" r="2" fill="#CFC7C2" style="--dx:${k * 7}px"/>`)
+    .join('')
+  const okBadge =
+    `<g class="pm-dl-ok"><circle cx="${bx / 2}" cy="-8" r="5.4" fill="#3DDC97"/>` +
+    `<path d="M${bx / 2 - 2.4} -8 l1.7 1.7 l3.2 -3.4" fill="none" stroke="#0B1F16" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></g>`
   const deliver = delivering
     ? `<g style="--d:${(-deliverAge / 1000).toFixed(3)}s">` +
-      `<g class="pm-dl-rider"><g transform="translate(0 ${riderY.toFixed(1)}) scale(${SC})">${rider()}</g></g>` +
+      `<g class="pm-dl-rider"><g transform="translate(0 ${riderY.toFixed(1)}) scale(${SC})">` +
+      `<g class="pm-dl-brake" style="transform-origin:194px 117px"><g class="pm-dl-wheelie" style="transform-origin:62px 117px">${rider(false)}</g></g>` +
+      `</g></g>` +
       `<g class="pm-dl-box" transform="translate(${boxX.toFixed(1)} ${(groundY - boxS).toFixed(1)})">` +
-      `<g class="pm-dl-boxin">` +
-      `<rect width="${boxS}" height="${boxS}" rx="2.5" fill="#FF3000"/><rect width="${boxS}" height="3.5" rx="1.5" fill="#FFFFFF" opacity=".18"/>` +
-      `<g transform="translate(3.6 2.6) scale(.017)"><g fill="none" stroke="#FFFFFF" stroke-width="58.8" stroke-linecap="round" stroke-linejoin="round"><path d="M173.2 100.4 L328.27 255.47 A88.7 88.7 0 0 1 202.83 380.91 L173.27 351.35"/><path d="M173 224.2 L261.3 312.5"/></g></g>` +
-      `</g>` +
+      dust +
+      `<g class="pm-dl-boxin">${deliverBox}</g>` +
       `<g transform="translate(${boxS / 2} ${boxS / 2})">${burst}</g>` +
+      okBadge +
       `</g>` +
       `</g>`
     : ''
@@ -469,12 +442,21 @@ export function cardSvg(d: CardData): string {
     `.pm-dl-rider{animation:pm-dl-ride ${dl}ms linear var(--d) both}` +
     `.pm-dl-boxin{transform-box:fill-box;transform-origin:50% 100%;animation:pm-dl-box ${dl}ms linear var(--d) both}` +
     `.pm-dot{opacity:0;animation:pm-dl-dot ${dl}ms linear var(--d) both}` +
+    `.pm-dl-brake{animation:pm-dl-brake ${dl}ms linear var(--d) both}` +
+    `.pm-dl-wheelie{animation:pm-dl-wheelie ${dl}ms linear var(--d) both}` +
+    `.pm-dust{opacity:0;animation:pm-dl-dust ${dl}ms linear var(--d) both}` +
+    `.pm-dl-ok{transform-box:fill-box;transform-origin:center;opacity:0;animation:pm-dl-ok ${dl}ms linear var(--d) both}` +
+    // Brake: a small nose-dip on arrival. Wheelie: the front lifts as Claude pulls away.
+    `@keyframes pm-dl-brake{0%,27%{transform:rotate(0)}31%{transform:rotate(3.5deg)}35%,100%{transform:rotate(0)}}` +
+    `@keyframes pm-dl-wheelie{0%,62%{transform:rotate(0)}68%{transform:rotate(-8deg)}74%{transform:rotate(-6deg)}82%,100%{transform:rotate(0)}}` +
+    `@keyframes pm-dl-dust{0%,41%{opacity:0;transform:translate(0,0) scale(.6)}43%{opacity:.75}54%,100%{opacity:0;transform:translate(var(--dx),-3px) scale(1.7)}}` +
+    `@keyframes pm-dl-ok{0%,56%{opacity:0;transform:translateY(3px) scale(.3)}60%{opacity:1;transform:translateY(0) scale(1.18)}64%{transform:scale(1)}84%{opacity:1;transform:translateY(-2px) scale(1)}94%,100%{opacity:0;transform:translateY(-4px) scale(.8)}}` +
     // 0–30% ride in (ease out), 30–62% parked, 62–100% ride off (ease in).
     (lane
       ? `@keyframes pm-dl-ride{0%{opacity:0;transform:translateX(${laneL.toFixed(1)}px);animation-timing-function:cubic-bezier(.15,.7,.3,1)}8%{opacity:1}30%{transform:translateX(${parkX.toFixed(1)}px)}62%{opacity:1;transform:translateX(${parkX.toFixed(1)}px);animation-timing-function:cubic-bezier(.6,0,.85,.3)}92%{opacity:1}100%{opacity:0;transform:translateX(${(laneR - riderW).toFixed(1)}px)}}`
       : `@keyframes pm-dl-ride{0%{transform:translateX(-70px);animation-timing-function:cubic-bezier(.15,.7,.3,1)}30%{transform:translateX(${parkX.toFixed(1)}px)}62%{transform:translateX(${parkX.toFixed(1)}px);animation-timing-function:cubic-bezier(.6,0,.85,.3)}100%{transform:translateX(${W + 20}px)}}`) +
     // The box drops off the back at 34%, lands, pops at 52%, then shrinks away.
-    `@keyframes pm-dl-box{0%,33%{opacity:0;transform:translate(10px,-14px) scale(.7)}36%{opacity:1;transform:translate(4px,-10px) scale(.85)}42%{transform:translate(0,0) scale(1.08,.9)}46%{transform:scale(.96,1.05)}50%{transform:scale(1)}54%{transform:scale(1.18)}60%{opacity:1;transform:scale(1.04)}80%{opacity:1;transform:scale(1)}92%,100%{opacity:0;transform:scale(.6)}}` +
+    `@keyframes pm-dl-box{0%,33%{opacity:0;transform:translate(14px,-12px) rotate(0) scale(.8)}35%{opacity:1;transform:translate(9px,-19px) rotate(-12deg) scale(.95)}38%{transform:translate(4px,-15px) rotate(-22deg) scale(1)}41%{transform:translate(0,0) rotate(0) scale(1.14,.84)}44%{transform:scale(.94,1.07)}47%{transform:scale(1.03,.98)}50%{transform:scale(1)}54%{transform:scale(1.16)}59%{opacity:1;transform:scale(1)}86%{opacity:1;transform:scale(1)}94%,100%{opacity:0;transform:scale(.6)}}` +
     `@keyframes pm-dl-dot{0%,53%{opacity:0;transform:translate(0,0) scale(.4)}57%{opacity:1}75%{opacity:.9;transform:translate(var(--dx),var(--dy)) scale(1)}88%,100%{opacity:0;transform:translate(calc(var(--dx) * 1.25),calc(var(--dy) * 1.25 + 4px)) scale(.6)}}`
 
   const css =
@@ -483,14 +465,9 @@ export function cardSvg(d: CardData): string {
     `.pm-ride{animation:pm-ride ${RIDE_MS}ms cubic-bezier(.45,.05,.4,1) both}` +
     `.pm-ride-lane{animation:pm-ride-lane ${RIDE_MS}ms cubic-bezier(.45,.05,.4,1) both}` +
     `@keyframes pm-ride-lane{0%{opacity:0;transform:translateX(${laneL.toFixed(1)}px)}12%{opacity:1}88%{opacity:1}100%{opacity:0;transform:translateX(${(laneR - riderW).toFixed(1)}px)}}` +
-    `.pm-spin{animation:pm-spin .4s linear infinite}` +
-    `.pm-bob{animation:pm-bob .45s ease-in-out infinite}` +
-    `.pm-puff{animation:pm-puff .6s ease-out infinite}` +
     `@keyframes pm-pulse{0%{transform:scale(1);opacity:.55}70%{transform:scale(2.6);opacity:0}100%{transform:scale(2.6);opacity:0}}` +
     `@keyframes pm-ride{0%{transform:translateX(-80px)}100%{transform:translateX(${W + 10}px)}}` +
-    `@keyframes pm-spin{to{transform:rotate(360deg)}}` +
-    `@keyframes pm-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.2px)}}` +
-    `@keyframes pm-puff{0%{transform:translateX(0);opacity:.9}100%{transform:translateX(-12px);opacity:0}}` +
+    riderCss('pm-') +
     (delivering ? deliverCss : '') +
     `.pm-check{animation:pm-check .5s cubic-bezier(.3,.7,.3,1) .15s both}@keyframes pm-check{from{stroke-dashoffset:10}to{stroke-dashoffset:0}}` +
     ctx.css +

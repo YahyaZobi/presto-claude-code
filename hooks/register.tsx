@@ -220,7 +220,7 @@ export const register: Register = on => {
       const { Box, Svg } = $.ui.resolve(e)
       return (
         <Box flexDirection="row" alignItems="center" gap={1}>
-          <Svg source={riderVector({ moving: true, width: 52 })} alt="Claude riding a Presto scooter" width={52} height={27} />
+          <Svg source={riderVector({ moving: true, width: 58 })} alt="Claude riding a Presto scooter" width={58} height={30} />
           {await next(e)}
         </Box>
       )
