@@ -130,6 +130,12 @@ const LOGO_SVG =
   `<rect x="1.5" y="1.5" width="509" height="509" rx="74.3" fill="none" stroke="url(#pRim)" stroke-width="3"/>` +
   `</svg>`
 
+/** The logo in a circle, for the header badge. Same artwork, crisp at small sizes. */
+const LOGO_ROUND = LOGO_SVG.replace('<clipPath id="pClip"><rect width="512" height="512" rx="75.8"/></clipPath>', '<clipPath id="pClipR"><circle cx="256" cy="256" r="256"/></clipPath>')
+  .replace('clip-path="url(#pClip)"', 'clip-path="url(#pClipR)"')
+  .replace('<g filter="url(#pLift)">', '<g transform="translate(256 256) scale(1.12) translate(-250 -240)">')
+  .replace('<rect x="1.5" y="1.5" width="509" height="509" rx="74.3" fill="none" stroke="url(#pRim)" stroke-width="3"/>', '<circle cx="256" cy="256" r="250" fill="none" stroke="url(#pRim)" stroke-width="12"/>')
+
 const icon = (paths: string, x: number, y: number, size: number, stroke: string, width: number) =>
   `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
 const ICON_CLOCK = `<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>`
@@ -269,13 +275,23 @@ export function cardSvg(d: CardData): string {
   const headMid = top + 12
   const pillLabelW = measure(label, 11.5, 600, 0.02)
   const pillW = 9 + 7 + 8 + pillLabelW + 11
-  const BADGE = 22
+  const BADGE = 28
   const tagW = measure('Presto', 12, 600) + measure(' mode', 12, 500)
-  const tagX = mode === 'inline' ? mainX + BADGE + 9 : mainX + pillW + 10
+  const tagX = mode === 'inline' ? mainX + BADGE + 10 : mainX + pillW + 10
   const pillX = mode === 'inline' ? tagX + tagW + 14 : mainX
   const badge =
     mode === 'inline'
-      ? `<g filter="url(#pmBadgeShadow)"><svg x="${mainX}" y="${headMid - BADGE / 2}" width="${BADGE}" height="${BADGE}" viewBox="0 0 512 512">${LOGO_SVG.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg></g>`
+      ? (() => {
+          // Whole pixels, so the edge stays sharp; a hairline ring sets it off the card.
+          const bx = Math.round(mainX)
+          const by = Math.round(headMid - BADGE / 2)
+          const r = BADGE / 2
+          return (
+            `<circle cx="${bx + r}" cy="${by + r + 1}" r="${r}" fill="#000" opacity=".35"/>` +
+            `<svg x="${bx}" y="${by}" width="${BADGE}" height="${BADGE}" viewBox="0 0 512 512">${LOGO_ROUND.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg>` +
+            `<circle cx="${bx + r}" cy="${by + r}" r="${r + 0.5}" fill="none" stroke="#FFFFFF" stroke-opacity=".12"/>`
+          )
+        })()
       : ''
   const dotCx = pillX + 9 + 3.5
   const pill =
