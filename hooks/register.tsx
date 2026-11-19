@@ -228,7 +228,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // ─── The Presto mode card above the prompt ────────────────────────────────
+  // ─── The Presto Dev card above the prompt ────────────────────────────────
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
     if (e.surface !== 'terminal' && e.surface !== 'desktop' && e.surface !== 'vscode') return next(e)
@@ -304,7 +304,7 @@ export const register: Register = on => {
       card = {
         key,
         source: cardSvg({ status, label, task, elapsed, steps, context, fiveHour, fiveResets, week, resets, now, ...(cost !== undefined ? { cost } : {}), ...(j?.endedAt ? { doneAt: j.endedAt } : {}), ...(sentAt !== undefined ? { sentAt } : {}), ...(runFor !== undefined ? { liveFrom: runFor } : {}), from }),
-        alt: `Presto mode. ${label}. ${runFor === undefined ? `${elapsed}, ` : ''}${steps} steps${cost === undefined ? '' : `, ${cost}`}. Context ${context}%, 5-hour ${fiveHour}% (resets ${fiveResets}), week ${week}% (resets ${resets}).`,
+        alt: `Presto Dev. ${label}. ${runFor === undefined ? `${elapsed}, ` : ''}${steps} steps${cost === undefined ? '' : `, ${cost}`}. Context ${context}%, 5-hour ${fiveHour}% (resets ${fiveResets}), week ${week}% (resets ${resets}).`,
       }
     }
 

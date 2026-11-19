@@ -23,7 +23,7 @@ Restart Claude Code (or open a new session) to see it.
 ## What it does
 
 - **Presto theme** in the desktop app, light and dark: brand `#FF3000` and the Presto orange ramp.
-- **The Presto mode card** above the prompt: a slim dark card with the Presto logo in its header. It shows:
+- **The Presto Dev card** above the prompt: a slim dark card with the Presto logo in its header. It shows:
   - a status pill: **Working**, **Needs your input** (when Claude asks a question or waits for a permission), **Done**, **Failed**, or **Stopped** when you interrupt
   - how long the request has run, how many steps (tool calls) it took, and what the session has cost so far (in its own chip)
   - three meters: **Context** (how full the context window is), **5-hour** and **Week** (your plan limits), each with when it resets. They turn amber at 60% and red at 85%

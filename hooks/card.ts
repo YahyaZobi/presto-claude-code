@@ -130,11 +130,20 @@ const LOGO_SVG =
   `<rect x="1.5" y="1.5" width="509" height="509" rx="74.3" fill="none" stroke="url(#pRim)" stroke-width="3"/>` +
   `</svg>`
 
-/** The logo in a circle, for the header badge. Same artwork, crisp at small sizes. */
-const LOGO_ROUND = LOGO_SVG.replace('<clipPath id="pClip"><rect width="512" height="512" rx="75.8"/></clipPath>', '<clipPath id="pClipR"><circle cx="256" cy="256" r="256"/></clipPath>')
-  .replace('clip-path="url(#pClip)"', 'clip-path="url(#pClipR)"')
-  .replace('<g filter="url(#pLift)">', '<g transform="translate(256 256) scale(1.12) translate(-250 -240)">')
-  .replace('<rect x="1.5" y="1.5" width="509" height="509" rx="74.3" fill="none" stroke="url(#pRim)" stroke-width="3"/>', '<circle cx="256" cy="256" r="250" fill="none" stroke="url(#pRim)" stroke-width="12"/>')
+/**
+ * The header badge: a flat squircle in Presto red with the mark in white. Flat
+ * colour and a single-colour mark stay crisp at 30 px, where the rendered logo's
+ * gradients and rim turn muddy.
+ */
+const BADGE_SVG =
+  `<defs><linearGradient id="pbF" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FF4A1C"/><stop offset="1" stop-color="#F02C00"/></linearGradient>` +
+  `<linearGradient id="pbH" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".3"/><stop offset=".45" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient></defs>` +
+  `<rect width="512" height="512" rx="128" fill="url(#pbF)"/>` +
+  `<g transform="translate(256 256) scale(1.08) translate(-262 -254)">` +
+  `<g fill="none" stroke="#FFFFFF" stroke-width="58.8" stroke-linecap="round" stroke-linejoin="round">` +
+  `<path d="M173.2 100.4 L328.27 255.47 A88.7 88.7 0 0 1 202.83 380.91 L173.27 351.35"/><path d="M173 224.2 L261.3 312.5"/></g>` +
+  `<g fill="#FFFFFF"><circle cx="173" cy="100.3" r="29.2"/><circle cx="261.4" cy="312.7" r="29.2"/><circle cx="173" cy="351.2" r="29.2"/></g></g>` +
+  `<rect x="8" y="8" width="496" height="496" rx="120" fill="none" stroke="url(#pbH)" stroke-width="16"/>`
 
 const icon = (paths: string, x: number, y: number, size: number, stroke: string, width: number) =>
   `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
@@ -271,25 +280,24 @@ export function cardSvg(d: CardData): string {
   const mainH = 24 + 20 + (15 + 8 + 4 + 8 + 14)
   const top = contentTop + (contentH - mainH) / 2
 
-  // ── Header: pill + "Presto mode", then clock · steps and the session cost on the right.
+  // ── Header: badge + "Presto Dev" + pill, then clock · steps and the session cost on the right.
   const headMid = top + 12
   const pillLabelW = measure(label, 11.5, 600, 0.02)
   const pillW = 9 + 7 + 8 + pillLabelW + 11
-  const BADGE = 28
-  const tagW = measure('Presto', 12, 600) + measure(' mode', 12, 500)
+  const BADGE = 30
+  const tagW = measure('Presto', 12, 600) + measure(' Dev', 12, 500)
   const tagX = mode === 'inline' ? mainX + BADGE + 10 : mainX + pillW + 10
   const pillX = mode === 'inline' ? tagX + tagW + 14 : mainX
   const badge =
     mode === 'inline'
       ? (() => {
-          // Whole pixels, so the edge stays sharp; a hairline ring sets it off the card.
+          // Whole pixels, so the edge stays sharp; a soft offset shadow lifts it off the card.
           const bx = Math.round(mainX)
           const by = Math.round(headMid - BADGE / 2)
-          const r = BADGE / 2
+          const rx = (BADGE * 128) / 512
           return (
-            `<circle cx="${bx + r}" cy="${by + r + 1}" r="${r}" fill="#000" opacity=".35"/>` +
-            `<svg x="${bx}" y="${by}" width="${BADGE}" height="${BADGE}" viewBox="0 0 512 512">${LOGO_ROUND.replace(/^<svg viewBox="0 0 512 512">/, '').replace(/<\/svg>$/, '')}</svg>` +
-            `<circle cx="${bx + r}" cy="${by + r}" r="${r + 0.5}" fill="none" stroke="#FFFFFF" stroke-opacity=".12"/>`
+            `<rect x="${bx + 0.5}" y="${by + 1.5}" width="${BADGE - 1}" height="${BADGE - 1}" rx="${rx}" fill="#000" opacity=".4"/>` +
+            `<svg x="${bx}" y="${by}" width="${BADGE}" height="${BADGE}" viewBox="0 0 512 512">${BADGE_SVG}</svg>`
           )
         })()
       : ''
@@ -302,7 +310,7 @@ export function cardSvg(d: CardData): string {
     `<text x="${pillX + 9 + 7 + 8}" y="${baseline(top, 24, 11.5) + 0.2}" font-family="${SANS}" font-size="11.5" font-weight="600" letter-spacing="0.23" fill="${s.text}">${esc(label)}</text>`
   const tag =
     `<text x="${tagX}" y="${baseline(headMid - 7.5, 15, 12)}" font-family="${SANS}" font-size="12">` +
-    `<tspan font-weight="600" fill="${C.brandTag}">Presto</tspan><tspan font-weight="500" fill="${C.textSubtle}"> mode</tspan></text>`
+    `<tspan font-weight="600" fill="${mode === 'inline' ? C.text : C.brandTag}">Presto</tspan><tspan font-weight="500" fill="${C.textSubtle}"> Dev</tspan></text>`
 
   const stepsText = `${d.steps} steps`
   const metaBase = baseline(headMid - 7.5, 15, 12, true)
@@ -469,7 +477,7 @@ export function cardSvg(d: CardData): string {
   // Ids unique to this drawing, so two cards on one page never share gradients.
   const u = `${d.status}${Math.round(d.context)}x${Math.round(d.week)}`
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Presto mode: ${esc(label)}">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Presto Dev: ${esc(label)}">` +
     `<style>${css}</style>` +
     `<defs>` +
     `<linearGradient id="pmBorder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".13"/><stop offset=".5" stop-color="#FFFFFF" stop-opacity=".06"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".04"/></linearGradient>` +
